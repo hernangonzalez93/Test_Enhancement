@@ -1,0 +1,111 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+  background: #101418;
+  color: #e6e9ee;
+}
+
+.layout {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+header h1 {
+  font-size: 1.4rem;
+  margin: 0 0 0.5rem;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+nav a,
+.button {
+  color: #7cc4ff;
+  text-decoration: none;
+  border: 1px solid #29405a;
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.customer {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin: 0 0 1.5rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #223041;
+}
+
+form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 24rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+input,
+select,
+button {
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid #29405a;
+  background: #172029;
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.rental-detail {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.25rem 1rem;
+}
+
+.rental-detail dt {
+  opacity: 0.7;
+}
+
+.rental-detail dd {
+  margin: 0;
+}
+
+.error {
+  color: #ff8f8f;
+}

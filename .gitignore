@@ -1,0 +1,19 @@
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+.vs/
+.idea/
+node_modules/
+dist/
+playwright-report/
+test-results/
+.env.local
+coverage/
+
+# Artefactos de compilacion de TypeScript
+*.tsbuildinfo
+
+# Generado por extensiones del editor, ajeno al proyecto
+.github/copilot-instructions.md

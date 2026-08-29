@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Vive bajo tests/ pero NO es un proyecto de pruebas: es la biblioteca de
+       apoyo que comparten todos los demas. Por eso revierte lo que impone
+       Directory.Build.props para las carpetas de test. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <IsTestProject>false</IsTestProject>
+    <TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Rentals\Rentals.Application\Rentals.Application.csproj" />
+  </ItemGroup>
+
+</Project>

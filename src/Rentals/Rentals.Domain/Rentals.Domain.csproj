@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- La capa de dominio NO tiene ninguna dependencia externa. Esa es la garantia
+       que hace que sus pruebas sean puras, deterministas y de milisegundos. -->
+</Project>

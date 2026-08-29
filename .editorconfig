@@ -1,0 +1,14 @@
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+indent_style = space
+
+[*.cs]
+indent_size = 4
+csharp_style_namespace_declarations = file_scoped:warning
+
+[*.{json,yml,yaml,ts,tsx,js,jsx,csproj,props,targets}]
+indent_size = 2

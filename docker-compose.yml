@@ -1,0 +1,168 @@
+name: testenforce
+
+services:
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: te-postgres
+    environment:
+      POSTGRES_DB: testenforce
+      POSTGRES_USER: testenforce
+      POSTGRES_PASSWORD: testenforce
+    ports:
+      # Puertos altos a proposito: 5432 y 9092 suelen estar ocupados por otras
+      # pilas locales, y el objetivo es que este compose conviva con ellas.
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testenforce -d testenforce"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Kafka en modo KRaft: sin ZooKeeper, un solo nodo que es broker y controller.
+  kafka:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: te-kafka
+    ports:
+      - "59092:9092"
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:59092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka:29092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  pricing-api:
+    build:
+      context: .
+      dockerfile: src/Pricing/Pricing.Api/Dockerfile
+    container_name: te-pricing
+    ports:
+      - "5102:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  fleet-api:
+    build:
+      context: .
+      dockerfile: src/Fleet/Fleet.Api/Dockerfile
+    container_name: te-fleet
+    ports:
+      - "5103:8080"
+    environment:
+      ConnectionStrings__FleetDatabase: Host=postgres;Port=5432;Database=testenforce;Username=testenforce;Password=testenforce
+      Database__AutoMigrate: "true"
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__Topic: rental-events
+      Kafka__GroupId: fleet-service
+      Kafka__Enabled: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  notifications-api:
+    build:
+      context: .
+      dockerfile: src/Notifications/Notifications.Api/Dockerfile
+    container_name: te-notifications
+    ports:
+      - "5104:8080"
+    environment:
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__Topic: rental-events
+      Kafka__GroupId: notifications-service
+      Kafka__Enabled: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rentals-api:
+    build:
+      context: .
+      dockerfile: src/Rentals/Rentals.Api/Dockerfile
+    container_name: te-rentals
+    ports:
+      - "5101:8080"
+    environment:
+      ConnectionStrings__RentalsDatabase: Host=postgres;Port=5432;Database=testenforce;Username=testenforce;Password=testenforce
+      Database__AutoMigrate: "true"
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__RentalEventsTopic: rental-events
+      Services__PricingBaseUrl: http://pricing-api:8080
+      Services__FleetBaseUrl: http://fleet-api:8080
+      Services__TimeoutSeconds: "5"
+      Services__MaxRetryAttempts: "2"
+      Services__RetryDelayMilliseconds: "100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      pricing-api:
+        condition: service_healthy
+      fleet-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  # nginx sirve el bundle de React y hace de proxy inverso hacia cada servicio.
+  # De este modo el navegador habla siempre con un unico origen y las pruebas
+  # E2E no dependen de CORS ni de variables de entorno en el cliente.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: te-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      rentals-api:
+        condition: service_healthy
+      fleet-api:
+        condition: service_healthy
+      notifications-api:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1 y no localhost: dentro del contenedor localhost resuelve
+      # primero a ::1 y nginx solo escucha en IPv4.
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:

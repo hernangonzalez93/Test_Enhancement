@@ -1,0 +1,33 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Fleet/">
+    <Project Path="src/Fleet/Fleet.Api/Fleet.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Notifications/">
+    <Project Path="src/Notifications/Notifications.Api/Notifications.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Pricing/">
+    <Project Path="src/Pricing/Pricing.Api/Pricing.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Rentals/">
+    <Project Path="src/Rentals/Rentals.Api/Rentals.Api.csproj" />
+    <Project Path="src/Rentals/Rentals.Application/Rentals.Application.csproj" />
+    <Project Path="src/Rentals/Rentals.Domain/Rentals.Domain.csproj" />
+    <Project Path="src/Rentals/Rentals.Infrastructure/Rentals.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/Shared.Contracts/Shared.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Fleet.Api.Tests/Fleet.Api.Tests.csproj" />
+    <Project Path="tests/Notifications.Tests/Notifications.Tests.csproj" />
+    <Project Path="tests/Pricing.Api.Tests/Pricing.Api.Tests.csproj" />
+    <Project Path="tests/Rentals.Api.Tests/Rentals.Api.Tests.csproj" />
+    <Project Path="tests/Rentals.Application.Tests/Rentals.Application.Tests.csproj" />
+    <Project Path="tests/Rentals.Domain.Tests/Rentals.Domain.Tests.csproj" />
+    <Project Path="tests/Rentals.Infrastructure.Tests/Rentals.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Rentals.Integration.Tests/Rentals.Integration.Tests.csproj" />
+    <Project Path="tests/Smoke.Tests/Smoke.Tests.csproj" />
+    <Project Path="tests/TestSupport/TestSupport.csproj" />
+  </Folder>
+</Solution>

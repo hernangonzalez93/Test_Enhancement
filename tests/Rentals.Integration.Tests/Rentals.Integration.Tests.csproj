@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Rentals\Rentals.Api\Rentals.Api.csproj" />
+    <ProjectReference Include="..\..\src\Fleet\Fleet.Api\Fleet.Api.csproj" />
+    <ProjectReference Include="..\..\src\Notifications\Notifications.Api\Notifications.Api.csproj" />
+    <ProjectReference Include="..\TestSupport\TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.Kafka" />
+    <PackageReference Include="WireMock.Net" />
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Contratos de eventos compartidos entre servicios. Es lo unico que
+       Rentals, Fleet y Notifications tienen en comun: nada de logica. -->
+</Project>

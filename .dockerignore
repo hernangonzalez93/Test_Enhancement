@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+tests/
+e2e/
+docs/
+.git/
+TestResults/
