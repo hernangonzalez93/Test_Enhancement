@@ -224,6 +224,48 @@ forma intermitente. Todo el repositorio comparte un instante de referencia:
 Aquí **no** se prueban reglas de negocio. Se prueba a quién se llama, con qué
 argumentos, en qué orden, y qué se devuelve cuando un colaborador falla.
 
+Esa frase suele generar dudas, así que conviene desarrollarla.
+
+### La idea: el dominio prueba decisiones, la aplicación prueba la coreografía
+
+`RentalService` no decide **nada** de negocio. Si se leen las líneas de
+`RequestAsync` separándolas en dos columnas, queda claro dónde vive cada cosa:
+
+| Coreografía — responsabilidad de Application | Decisión — responsabilidad de Domain |
+|---|---|
+| Preguntar a Fleet si el vehículo existe | Si el periodo es válido |
+| Consultar el solapamiento en el repositorio | Si la licencia cubre la renta |
+| Pedir la tarifa a Pricing | Cuántos días facturables hay |
+| Guardar y confirmar la transacción | Cuánto cuesta la renta |
+| Publicar los eventos de integración | Qué transiciones de estado son legales |
+
+Todo lo de la columna derecha está delegado a `Rental.Request(...)` y a los value
+objects. Lo de la izquierda **es** el trabajo de `RentalService`, y tiene errores
+propios que ninguna prueba de dominio puede detectar: el dominio ni siquiera sabe que
+Fleet, Kafka o PostgreSQL existen.
+
+### Lo que se sustituye y lo que no
+
+En esta capa se sustituyen **los puertos, no el dominio**. `Rental`, `Money` y
+`RentalPeriod` son objetos reales en estas pruebas; solo se falsea la entrada/salida:
+base de datos, HTTP, bus de eventos y reloj.
+
+Es una distinción importante. En `Cancel_publishes_the_refund_computed_by_the_domain`
+aparece un `150m` que parece duplicar una regla ya probada:
+
+```csharp
+result.Value.RefundAmount.ShouldBe(150m);
+cancelled.RefundAmount.ShouldBe(150m);   // el mismo importe, ya dentro del evento
+```
+
+No se está reprobando la política de cancelación —de eso se encarga
+`CancellationPolicyTests`—. Se comprueba que el importe **que calculó el dominio de
+verdad** llega intacto al DTO y al evento de integración, sin perderse ni redondearse
+por el camino. Es propagación, no cálculo.
+
+Si el agregado estuviese mockeado, estas pruebas no valdrían nada: comprobarían que
+un doble devuelve lo que se le dijo que devolviera.
+
 ### El arnés
 
 `RentalServiceHarness` crea el servicio con los seis puertos sustituidos por dobles
@@ -245,7 +287,42 @@ _harness.VehicleCatalog
 
 Quien lee la prueba ve de inmediato cuál es el escenario.
 
-### Verificar el orden, no solo el resultado
+### 1. «A quién se llama»: verificar también lo que NO se llama
+
+```csharp
+result.Error.Code.ShouldBe("rental.overlapping");
+await _harness.PricingCalculator.DidNotReceive()
+    .QuoteAsync(Arg.Any<PricingRequest>(), Arg.Any<CancellationToken>());
+```
+
+Si ya se sabe que el vehículo está ocupado, pedir la tarifa es una llamada de red
+inútil en cada petición fallida. El dominio no puede detectar eso porque no sabe que
+Pricing está al otro lado de la red. Es una prueba de eficiencia además de corrección.
+
+La variante extrema es `Rejects_an_invalid_period_before_touching_any_collaborator`:
+un periodo inválido se rechaza **antes** de hablar con nadie.
+
+### 2. «Con qué argumentos»: que la traducción entre capas sea fiel
+
+```csharp
+await _harness.PricingCalculator.Received(1).QuoteAsync(
+    Arg.Is<PricingRequest>(request =>
+        request.VehicleClass == "economy"
+        && request.Days == 7
+        && request.BaseDailyRate == 30m),
+    Arg.Any<CancellationToken>());
+```
+
+Si alguien calculara los días con `(End - Start).Days` en lugar de usar
+`period.TotalDays`, **el dominio seguiría pasando todas sus pruebas** y el cliente
+recibiría una factura equivocada. El error está en el cableado, no en la regla, y
+este es el único nivel donde se ve.
+
+En la misma línea, `Uses_the_daily_rate_returned_by_pricing_and_not_the_catalog_one`
+congela de quién es la última palabra sobre el precio: Pricing devuelve 99, el
+catálogo decía 30, y la renta debe costar 99.
+
+### 3. «En qué orden»: que la secuencia sea segura
 
 ```csharp
 Received.InOrder(() =>
@@ -256,20 +333,35 @@ Received.InOrder(() =>
 });
 ```
 
-Publicar antes del commit permitiría notificar una renta que después no se guarda.
-Esa decisión de diseño solo se puede blindar con una prueba de interacción; ninguna
-prueba de estado la detectaría.
+Si se invierten publicar y guardar, y el commit falla, ya se notificó al cliente una
+renta que no existe. Fíjate en lo sutil que es: los tres colaboradores se llamaron, y
+el estado final del agregado es idéntico en ambos casos. La única diferencia es el
+**orden**, y solo una prueba de interacción la ve.
 
-### Verificar lo que NO se llama
+### 4. «Qué se devuelve cuando un colaborador falla»
+
+Los dobles permiten provocar fallos que con los servicios reales serían muy difíciles
+de reproducir a voluntad:
 
 ```csharp
-result.Error.Code.ShouldBe("rental.overlapping");
-await _harness.PricingCalculator.DidNotReceive()
-    .QuoteAsync(Arg.Any<PricingRequest>(), Arg.Any<CancellationToken>());
+_harness.PricingCalculator.QuoteAsync(...)
+    .Returns<PricingQuote>(_ => throw new ExternalServiceUnavailableException("pricing"));
+
+result.Error.Code.ShouldBe("pricing.unavailable");                 // acabará en 503, no en 500
+await _harness.UnitOfWork.DidNotReceive().SaveChangesAsync(...);   // no queda nada a medias
 ```
 
-Si hay solapamiento, no tiene sentido gastar una llamada de red a Pricing. Es una
-prueba de eficiencia además de corrección.
+Y el caso inverso, que es una decisión de diseño explícita y por tanto merece prueba:
+
+```csharp
+// El bus de eventos falla DESPUÉS del commit
+result.IsSuccess.ShouldBeTrue();
+await _harness.UnitOfWork.Received(1).SaveChangesAsync(...);
+```
+
+La renta ya está guardada; perder el evento se registra y se continúa, en lugar de
+tirar abajo una operación de negocio ya confirmada. Sin una prueba que lo fije,
+alguien «arreglará» ese `catch` en el siguiente refactor.
 
 ### Errores esperados no son excepciones
 
@@ -277,6 +369,27 @@ prueba de eficiencia además de corrección.
 fallo del sistema: es una respuesta válida del caso de uso. Las excepciones de
 dominio se capturan en la frontera y se traducen a `Result.Failure(código, mensaje)`.
 Eso hace que la API tenga un único punto de traducción a HTTP.
+
+### El precio de las pruebas de interacción
+
+Conviene decirlo claro: estas pruebas **se acoplan a la implementación**. Si mañana
+se añade una caché delante de Fleet, `Received(1)` fallará aunque el comportamiento
+observable sea correcto.
+
+Ese es el precio de poder verificar orden y llamadas, y por eso se usan **solo aquí**,
+donde la interacción *es* el comportamiento. En el dominio no aparece ni un doble:
+allí lo que importa es el estado resultante.
+
+### Cómo saber si una prueba está en el nivel equivocado
+
+Al leerla, pregúntate: **¿hay aquí un cálculo o una condición de negocio?**
+
+- «48 horas de antelación → 100 % de reembolso» → es una regla → va al dominio.
+- «si Fleet devuelve null, el resultado es `vehicle.not_found` y no se guarda nada»
+  → es coreografía → va a Application.
+
+Y el reverso también sirve de alarma: si una prueba de dominio necesita un mock,
+probablemente el dominio tiene una dependencia que no debería tener.
 
 ### NSubstitute y Moq
 
