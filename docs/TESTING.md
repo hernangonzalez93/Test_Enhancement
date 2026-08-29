@@ -416,6 +416,26 @@ accidentales. El patrón (arrange → act → verify) es idéntico.
 Un adaptador es, por definición, código que solo tiene sentido frente a la tecnología
 que adapta. Probarlo con dobles es probar el doble.
 
+### La idea: aquí no se prueba tu lógica, se prueban tus suposiciones
+
+Los niveles 1 y 2 prueban **código tuyo**. Este nivel prueba **lo que dabas por
+supuesto sobre el sistema de otro**, y una suposición equivocada solo la desmiente el
+sistema real.
+
+Ejemplo salido de este mismo repositorio. El primer mapeo de concurrencia optimista
+fue este, y compilaba sin una sola advertencia:
+
+```csharp
+builder.Property(rental => rental.Version)
+    .HasColumnName("xmin").HasColumnType("xid")
+    .ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+```
+
+Un doble lo habría aceptado sin rechistar. PostgreSQL no: `xmin` es una columna de
+sistema y la migración generada intentaba **crearla**. El error no estaba en el
+razonamiento, sino en lo que se creía que hacía la otra pieza. Eso es lo que atrapa
+este nivel y ningún otro.
+
 ### PostgreSQL real con Testcontainers
 
 ```csharp
@@ -440,21 +460,41 @@ modo que arranca una sola vez para toda la colección. El aislamiento entre prue
 consigue con un `TRUNCATE` en `InitializeAsync`, que es mucho más rápido que recrear
 el contenedor.
 
-**Por qué no un proveedor en memoria**: EF Core InMemory no ejecuta SQL, no valida
-tipos de columna, no aplica migraciones y no detecta conflictos de concurrencia. Las
-cinco cosas que estas pruebas necesitan comprobar.
+#### Lo que se prueba no es el negocio: es el mapeo
 
-Lo que se verifica aquí:
+Y el mapeo no es código tuyo. Es SQL que **EF Core genera** a partir de tu
+configuración, y no se puede verificar leyéndolo. El caso más claro es la consulta de
+solapamiento:
 
-- Que los value objects sobreviven al viaje de ida y vuelta (`Money`, `RentalPeriod`,
-  `DriverLicense` como *owned types*).
-- Que las columnas opcionales (`final_total`, `refund_amount`) quedan en `NULL`.
-- Que la consulta de solapamiento genera el SQL correcto, incluidos los casos
-  contiguos y las rentas canceladas.
-- Que dos escrituras concurrentes producen `DbUpdateConcurrencyException`.
-- Que los `DateTimeOffset` vuelven en UTC.
+```csharp
+var blockingStates = new[] { RentalStatus.Pending, RentalStatus.Confirmed, RentalStatus.Active };
 
-### Concurrencia optimista sin ensuciar el dominio
+return await context.Rentals.AnyAsync(
+    rental => rental.VehicleId == vehicleId                 // tipo fuerte  → uuid
+              && blockingStates.Contains(rental.Status)     // enum→string  → IN (...)
+              && rental.Period.Start < end                  // owned type   → columna
+              && start < rental.Period.End,
+    cancellationToken);
+```
+
+Tres traducciones nada triviales en cuatro líneas. Si alguna no se soporta, EF lanza
+en tiempo de ejecución o —peor todavía— evalúa en cliente y se trae la tabla entera.
+
+Las cinco cosas que se verifican:
+
+| Qué | Cómo se comprueba |
+|---|---|
+| Los value objects vuelven idénticos | `Money.Of(75.55m, "EUR")` × 4 días → `302.20 EUR` tras el viaje |
+| Las columnas opcionales quedan en `NULL` | `FinalTotal` y `RefundAmount` nulos mientras la renta vive |
+| El SQL de solapamiento acierta | intersección sí, contiguo no, cancelada no, otro vehículo no |
+| La concurrencia optimista funciona | dos contextos → `DbUpdateConcurrencyException` |
+| Las fechas vuelven en UTC | `Period.Start.Offset.ShouldBe(TimeSpan.Zero)` |
+
+**Por qué no EF Core InMemory**: no ejecuta SQL, no aplica migraciones, no valida
+tipos de columna y no detecta conflictos de concurrencia. Es decir, no puede
+comprobar ninguna de las cinco.
+
+#### Concurrencia optimista sin ensuciar el dominio
 
 La tabla tiene una columna `concurrency_stamp` que **no existe en el agregado**: es
 una *shadow property* de EF Core, renovada en `SaveChangesAsync`:
@@ -471,19 +511,35 @@ persistencia, y aun así dos procesos que escriben a la vez chocan.
 ### Kafka real con Testcontainers
 
 `KafkaEventPublisherTests` levanta un broker en modo KRaft y congela el **contrato de
-transporte**, que es lo que comparten productor y consumidores:
+transporte**: tres decisiones que ningún compilador protege.
 
-- La clave de partición es el id de la renta (garantiza orden por renta).
-- La cabecera `event-type` permite enrutar sin deserializar.
-- El JSON publicado se deserializa de vuelta al mismo evento.
+- El **topic** (`rental-events`).
+- La **clave de partición**: el id de la renta, que garantiza orden por renta.
+- La **cabecera** `event-type`, que permite enrutar sin deserializar.
 
-Un mock jamás detectaría que el productor escribe la cabecera con un nombre y el
-consumidor la lee con otro.
+El argumento decisivo es este: productor y consumidores viven en **assemblies
+distintos** y solo comparten `Shared.Contracts`. Si el productor escribiera la
+cabecera como `event-type` y el consumidor la leyera como `eventType`, **todo
+compilaría**, todas las pruebas unitarias pasarían, y en producción los mensajes se
+descartarían en silencio. Solo un broker real lo detecta.
+
+```csharp
+message.Message.Headers.TryGetLastBytes(EventHeaders.EventType, out var typeBytes).ShouldBeTrue();
+Encoding.UTF8.GetString(typeBytes).ShouldBe(IntegrationEventTypes.RentalRequested);
+```
 
 ### WireMock.Net para los clientes HTTP
 
-`HttpAdapterTests` prueba la **traducción de protocolo**, incluidos los caminos que
-el servicio real casi nunca produce y que en producción son justo los que rompen:
+`HttpAdapterTests` prueba la **traducción de protocolo**. La decisión de diseño que
+más pesa está en cuatro líneas del adaptador de Fleet:
+
+```csharp
+if (response.StatusCode == HttpStatusCode.NotFound) return null;   // no existe NO es un error
+if (!response.IsSuccessStatusCode) throw new ExternalServiceUnavailableException("fleet");
+```
+
+«No existe» y «no está disponible» son cosas distintas, y esa distinción es la que
+después decide si el usuario ve **404** o **503**.
 
 | Situación | Traducción esperada |
 |---|---|
@@ -494,15 +550,33 @@ el servicio real casi nunca produce y que en producción son justo los que rompe
 | Pricing responde 400 | `ExternalServiceUnavailableException` |
 | Pricing no escucha | `ExternalServiceUnavailableException` |
 
-Esa distinción entre «no existe» y «no está disponible» es la que después convierte
-la API en 404 o en 503.
+Lo que hace útil a WireMock es precisamente la mitad inferior de esa tabla: con el
+servicio real es casi imposible provocar un 500 o un timeout cuando quieres. Con
+WireMock es una línea.
 
-### Reintentos y cableado de la inyección de dependencias
+```csharp
+.RespondWith(Response.Create().WithDelay(TimeSpan.FromSeconds(3)).WithStatusCode(HttpStatusCode.OK));
+```
 
-`ResilienceAndWiringTests` resuelve los puertos **desde el contenedor real**, con la
-misma llamada `AddRentalsInfrastructure(configuration)` que usa la API. Usando
-escenarios de WireMock comprueba que un 503 transitorio se reintenta y que la segunda
-llamada tiene éxito:
+### Por qué WireMock aquí y el servicio real en el nivel 4
+
+Es la pregunta que suele surgir al comparar esta sección con la de integración. La
+respuesta es que los dos niveles persiguen objetivos **opuestos**:
+
+- El **nivel 3** quiere *control total* sobre el otro lado, incluidos estados que el
+  servicio real casi nunca produce.
+- El **nivel 4** quiere *realidad*: que Fleet responda lo que de verdad responde.
+
+No es duplicación, son preguntas distintas. Por eso en las pruebas de integración
+Pricing sigue simulado —su lógica ya está cubierta y hace falta poder tirarlo a
+voluntad— mientras que Fleet es real.
+
+### Las dos pruebas que parecen fuera de sitio
+
+**`ResilienceAndWiringTests`** resuelve los puertos **desde el contenedor de DI real**,
+con la misma llamada `AddRentalsInfrastructure(configuration)` que usa la API. Prueba
+dos cosas que nadie más ejercita hasta producción: que el registro de dependencias es
+correcto, y que la política de reintentos existe y funciona.
 
 ```csharp
 _server.Given(...).InScenario("pricing-retry").WillSetStateTo("recovered")
@@ -519,11 +593,34 @@ la prueba tarde milisegundos en vez de segundos. **Hacer configurable lo que la
 prueba necesita acelerar** es un principio que aparece varias veces en este
 repositorio.
 
-### Pruebas de contrato del mensaje
+**`EventContractTests`** es la excepción del nivel: no necesita Docker. Congela los
+nombres de los tipos de evento, el nombre del topic y la forma del JSON. Está aquí y
+no en el dominio porque esos nombres son del **exterior**: son contrato público, no
+lenguaje interno. Si alguien renombra una propiedad, falla aquí en un segundo, y no
+en producción tres semanas después.
 
-`EventContractTests` no necesita Docker: congela los nombres de los tipos de evento,
-el nombre del topic y la forma del JSON. Si alguien renombra una propiedad, falla
-aquí en un segundo, y no en producción tres semanas después.
+### El coste, y cómo se paga
+
+Este nivel tarda 44 s frente a los 2 s del dominio. Tres decisiones lo mantienen
+manejable:
+
+- Contenedor compartido por colección (`ICollectionFixture<>`), no por prueba.
+- `TRUNCATE` entre pruebas en lugar de recrear el contenedor.
+- Tiempos de reintento y timeouts configurables.
+
+Y el aviso honesto: **es el nivel que más problemas de entorno da**. De los cuatro
+fallos encadenados que se documentan en la sección 12 (puntos 8 a 11), tres estaban
+aquí o en su frontera: el hilo del consumidor, el `TRUNCATE` concurrente y el topic
+inexistente.
+
+### Cómo saber si algo va aquí
+
+Pregúntate si lo que quieres comprobar es **«¿mi lógica decide bien?»** o
+**«¿esto funciona de verdad contra X?»**.
+
+- «El reembolso con 30 h de antelación es del 50 %» → lógica → dominio.
+- «El `IN` con enums convertidos a string se traduce a SQL» → contra X → aquí.
+- «Un 404 de Fleet significa que el vehículo no existe» → contra X → aquí.
 
 ---
 
