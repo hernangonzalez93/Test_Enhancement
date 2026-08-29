@@ -175,6 +175,37 @@ API completa —enrutado, serialización, middlewares, validación— sin Docker
 `Fleet.Api.Tests` usa las dos cosas a la vez: la API va en memoria (gratis) y solo
 PostgreSQL es un contenedor.
 
+#### Varios Kafka en la misma máquina, y cuál estás mirando
+
+Ejecutar este repositorio puede dejar **tres brokers de Kafka distintos** funcionando a
+la vez en el mismo equipo. Confundirlos es una fuente de desconcierto real, así que
+conviene tenerlos claros:
+
+| Broker | Puerto en el host | Vida | Quién lo ve |
+|---|---|---|---|
+| El de `docker compose` de este proyecto | **59092** | Mientras la pila esté levantada | Kafka UI en :5105, humo, E2E |
+| Los efímeros de **Testcontainers** | Puerto aleatorio | Solo durante una ejecución de pruebas | Únicamente el código de la prueba |
+| Cualquier otra pila local tuya | Normalmente 9092 | Ajena a este repositorio | Sus propias herramientas |
+
+Por eso `docker-compose.yml` publica PostgreSQL en **55432** y Kafka en **59092** en vez
+de los puertos estándar: para **convivir** con otras pilas que ya usen 5432 y 9092, en
+lugar de pelearse con ellas por el puerto. Lo mismo con Kafka UI, que va al 5105 y no
+al 8080.
+
+Las dos consecuencias prácticas:
+
+- **Kafka UI no ve los brokers de Testcontainers.** Sirve para depurar el sistema
+  desplegado, las pruebas de humo y las E2E; no `Rentals.Infrastructure.Tests` ni
+  `Rentals.Integration.Tests`, que inspeccionan los mensajes desde el propio código de
+  la prueba con un consumidor creado al efecto.
+- **Si abres una UI de Kafka y no ves lo que esperas, comprueba primero a qué broker
+  está apuntando.** Un topic `rental-events` vacío suele significar que estás mirando
+  el clúster equivocado, no que la publicación haya fallado.
+
+Las pruebas de integración van un paso más allá: además de un broker propio, usan un
+**topic con nombre único por ejecución** y **grupos de consumo únicos**, de modo que dos
+ejecuciones simultáneas no se pisan ni siquiera dentro del mismo contenedor.
+
 #### Un detalle práctico
 
 Si se ejecuta `dotnet test` **sin** la pila levantada, los 273 casos pasan salvo los

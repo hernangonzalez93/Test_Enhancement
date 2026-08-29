@@ -532,6 +532,12 @@ GROUP          TOPIC          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
 fleet-service  rental-events  0          49              49              0
 ```
 
+> Aviso si usas **Git Bash** en Windows: convierte automáticamente los argumentos que
+> empiezan por `/` en rutas de Windows, así que `docker exec ... /opt/kafka/bin/algo.sh`
+> se transforma en `C:/Program Files/Git/opt/...` y falla. Se evita duplicando la barra
+> (`//opt/...`) o ejecutando desde PowerShell. Los comandos de esta sección no lo sufren
+> porque invocan los binarios por nombre, que están en el `PATH` de la imagen.
+
 Leer los mensajes con su clave y sus cabeceras:
 
 ```bash
@@ -540,12 +546,31 @@ docker exec te-kafka kafka-console-consumer --bootstrap-server kafka:29092 --top
 
 ---
 
-## 11. Una limitación importante
+## 11. Varios Kafka a la vez: cuál estás mirando
 
-Las pruebas con **Testcontainers levantan su propio broker efímero** en un puerto
-aleatorio, distinto del de compose. Kafka UI solo ve el clúster de `docker compose`.
+Ejecutar este repositorio puede dejar **tres brokers distintos** funcionando en el
+mismo equipo:
 
-Sirve, por tanto, para depurar el sistema desplegado, las pruebas de humo y las E2E.
-**No** verás ahí lo que hacen `Rentals.Infrastructure.Tests` ni
-`Rentals.Integration.Tests`: para esas, los mensajes se inspeccionan desde el propio
-código de la prueba, con un consumidor creado al efecto.
+| Broker | Puerto en el host | Vida | Quién lo ve |
+|---|---|---|---|
+| El de `docker compose` | **59092** | Mientras la pila esté levantada | Kafka UI :5105, humo, E2E |
+| Los efímeros de **Testcontainers** | Puerto aleatorio | Solo durante una ejecución de pruebas | Únicamente el código de la prueba |
+| Cualquier otra pila local | Normalmente 9092 | Ajena a este repositorio | Sus propias herramientas |
+
+Por eso este compose publica PostgreSQL en 55432 y Kafka en 59092 en lugar de los
+puertos estándar, y Kafka UI en 5105 en lugar de 8080: para **convivir** con otras
+pilas en vez de disputarles el puerto.
+
+Dos consecuencias prácticas:
+
+- **Kafka UI solo ve el clúster de compose.** Sirve para depurar el sistema desplegado,
+  las pruebas de humo y las E2E. **No** verás ahí lo que hacen
+  `Rentals.Infrastructure.Tests` ni `Rentals.Integration.Tests`: esas inspeccionan los
+  mensajes desde el propio código de la prueba, con un consumidor creado al efecto.
+- **Si una UI de Kafka no muestra lo que esperas, comprueba primero a qué broker apunta.**
+  Un `rental-events` vacío suele significar que estás mirando el clúster equivocado, no
+  que la publicación haya fallado.
+
+Las pruebas de integración van más allá: además de su propio broker usan un **topic con
+nombre único por ejecución** y **grupos de consumo únicos**, para que dos ejecuciones
+simultáneas no se pisen ni dentro del mismo contenedor.
