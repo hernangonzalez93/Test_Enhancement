@@ -60,14 +60,14 @@ permite que el 60 % de las pruebas no necesiten Docker.
 | 1 | `Rentals.Domain.Tests` | Unitaria pura | 66 | 96 | Las reglas de negocio | — | 2 s |
 | 2 | `Rentals.Application.Tests` | Unitaria con dobles | 29 | 29 | La orquestación del caso de uso | — | 3 s |
 | 3 | `Pricing.Api.Tests` | Unitaria + API | 18 | 27 | El motor de tarifas y su contrato HTTP | — | 3 s |
-| 4 | `Notifications.Tests` | Unitaria + API | 14 | 14 | La traducción evento → notificación (Moq) | — | 3 s |
+| 4 | `Notifications.Tests` | Unitaria + API | 18 | 18 | La traducción evento → notificación y su idempotencia (Moq) | — | 3 s |
 | 5 | `Rentals.Api.Tests` | API en memoria | 18 | 27 | El contrato HTTP y el mapeo de errores | — | 4 s |
 | 6 | `Rentals.Infrastructure.Tests` | Adaptadores | 33 | 37 | SQL, mapeo EF, Kafka, HTTP, reintentos | Docker | 44 s |
 | 7 | `Fleet.Api.Tests` | Servicio completo | 14 | 14 | API + PostgreSQL + regla de disponibilidad | Docker | 25 s |
 | 8 | `Rentals.Integration.Tests` | Integración entre servicios | 12 | 12 | Que los tres servicios se entienden | Docker | 41 s |
 | 9 | `Smoke.Tests` | Humo | 8 | 13 | Que el despliegue está vivo y cableado | compose | 2 s |
 | 10 | `e2e/` (Playwright) | E2E | 12 | 12 | Recorridos de usuario reales | compose | 14 s |
-| | **Total** | | **224** | **281** | | | |
+| | **Total** | | **228** | **285** | | | |
 
 «Métodos» son los `[Fact]` / `[Theory]` escritos; «casos» son las ejecuciones reales,
 porque cada `[InlineData]` de un `[Theory]` cuenta como una prueba independiente en el
@@ -105,7 +105,7 @@ Conviene aclarar un malentendido habitual: **ninguna prueba corre *dentro* de un
 contenedor**. Todas se ejecutan en la máquina de desarrollo (`dotnet test`,
 `npm test`). Lo que cambia es su relación con la infraestructura, y hay tres grupos.
 
-**Grupo 1 — no necesitan nada (193 de 281 casos, el 69 %)**
+**Grupo 1 — no necesitan nada (197 de 285 casos, el 69 %)**
 
 | Proyecto | Casos |
 |---|---|
@@ -113,7 +113,7 @@ contenedor**. Todas se ejecutan en la máquina de desarrollo (`dotnet test`,
 | `Rentals.Application.Tests` | 29 |
 | `Rentals.Api.Tests` | 27 |
 | `Pricing.Api.Tests` | 27 |
-| `Notifications.Tests` | 14 |
+| `Notifications.Tests` | 18 |
 
 Con Docker apagado corren igual, en unos 3 segundos en total. No es casualidad: es el
 retorno directo de la arquitectura hexagonal. El dominio no tiene dependencias y la
@@ -162,7 +162,7 @@ PostgreSQL es un contenedor.
 
 #### Un detalle práctico
 
-Si se ejecuta `dotnet test` **sin** la pila levantada, los 269 casos pasan salvo los
+Si se ejecuta `dotnet test` **sin** la pila levantada, los 273 casos pasan salvo los
 13 de `Smoke.Tests`, que fallan por conexión rechazada. Es el comportamiento
 esperado, no un fallo real: esas pruebas existen precisamente para comprobar un
 despliegue.

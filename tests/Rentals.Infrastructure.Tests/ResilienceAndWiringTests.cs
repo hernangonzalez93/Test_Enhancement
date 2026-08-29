@@ -28,7 +28,11 @@ public sealed class ResilienceAndWiringTests : IDisposable
                 ["ConnectionStrings:RentalsDatabase"] = "Host=localhost;Database=unused;Username=u;Password=p",
                 ["Services:PricingBaseUrl"] = _server.Url!,
                 ["Services:FleetBaseUrl"] = _server.Url!,
-                ["Services:TimeoutSeconds"] = "5",
+                // Timeout holgado a proposito. Lo que estas pruebas miden es el
+                // NUMERO de intentos, no el tiempo: con 5 s, el HttpClient.Timeout
+                // envuelve a los tres intentos y bajo carga los corta antes de
+                // completarlos, haciendo fallar la asercion por un motivo ajeno.
+                ["Services:TimeoutSeconds"] = "30",
                 ["Services:MaxRetryAttempts"] = "2",
                 ["Services:RetryDelayMilliseconds"] = "10"
             })

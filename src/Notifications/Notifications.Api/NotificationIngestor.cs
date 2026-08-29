@@ -29,7 +29,17 @@ public sealed class NotificationIngestor(INotificationStore store, ILogger<Notif
             return false;
         }
 
-        await store.AddAsync(notification, cancellationToken);
+        var stored = await store.AddAsync(notification, cancellationToken);
+        if (!stored)
+        {
+            // Idempotencia: Kafka entrega "al menos una vez". Tras un rebalanceo,
+            // el consumidor que hereda una particion reanuda desde el ultimo
+            // offset CONFIRMADO, no desde el ultimo procesado, asi que reprocesar
+            // es normal y no debe generar un aviso duplicado al cliente.
+            logger.LogDebug("Event {EventId} was already ingested, skipped.", notification.Id);
+            return false;
+        }
+
         logger.LogInformation("Stored notification for rental {RentalId}.", notification.RentalId);
 
         return true;

@@ -34,7 +34,7 @@ public sealed class NotificationIngestorTests
         _store
             .Setup(store => store.AddAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>()))
             .Callback<Notification, CancellationToken>((notification, _) => captured = notification)
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         var @event = ConfirmedEvent();
 
@@ -46,6 +46,35 @@ public sealed class NotificationIngestorTests
         captured.RentalId.ShouldBe(@event.RentalId);
         captured.CustomerId.ShouldBe(@event.CustomerId);
         captured.EventType.ShouldBe(IntegrationEventTypes.RentalConfirmed);
+    }
+
+    [Fact]
+    public async Task Reprocessing_the_same_event_stores_a_single_notification()
+    {
+        // Con el almacen real, no un doble: lo que se prueba es la deduplicacion
+        // de punta a punta entre la factoria, el ingestor y el almacen.
+        var store = new InMemoryNotificationStore();
+        var sut = new NotificationIngestor(store, NullLogger<NotificationIngestor>.Instance);
+        var @event = ConfirmedEvent();
+
+        var first = await sut.IngestAsync(@event);
+        var second = await sut.IngestAsync(@event);
+        var third = await sut.IngestAsync(@event);
+
+        first.ShouldBeTrue();
+        second.ShouldBeFalse();
+        third.ShouldBeFalse();
+        (await store.ListAsync(@event.CustomerId)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task A_duplicate_rejected_by_the_store_is_reported_as_not_ingested()
+    {
+        _store
+            .Setup(store => store.AddAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        (await CreateSut().IngestAsync(ConfirmedEvent())).ShouldBeFalse();
     }
 
     [Fact]
@@ -127,6 +156,17 @@ public sealed class NotificationFactoryTests
     }
 
     [Fact]
+    public void The_notification_id_is_the_event_id_so_a_reprocess_is_detectable()
+    {
+        var @event = new RentalConfirmedIntegrationEvent(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 150m, "USD", Now);
+
+        // Dos traducciones del MISMO evento producen el mismo Id.
+        NotificationFactory.From(@event).ShouldNotBeNull().Id.ShouldBe(@event.EventId);
+        NotificationFactory.From(@event).ShouldNotBeNull().Id.ShouldBe(@event.EventId);
+    }
+
+    [Fact]
     public void Every_notification_keeps_the_event_type_it_came_from()
     {
         var notification = NotificationFactory.From(
@@ -160,6 +200,19 @@ public sealed class InMemoryNotificationStoreTests
         await store.AddAsync(NotificationFor(Guid.NewGuid()));
 
         (await store.ListAsync(customerId)).ShouldHaveSingleItem().CustomerId.ShouldBe(customerId);
+    }
+
+    [Fact]
+    public async Task Adding_the_same_id_twice_keeps_only_the_first()
+    {
+        var store = new InMemoryNotificationStore();
+        var notification = NotificationFor(Guid.NewGuid());
+
+        (await store.AddAsync(notification)).ShouldBeTrue();
+        (await store.AddAsync(notification with { Message = "otro texto" })).ShouldBeFalse();
+
+        var stored = (await store.ListAsync(null)).ShouldHaveSingleItem();
+        stored.Message.ShouldBe("msg");
     }
 
     [Fact]

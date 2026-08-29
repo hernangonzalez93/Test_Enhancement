@@ -3,7 +3,7 @@
 Sistema de **renta de vehículos** en .NET 10 con arquitectura hexagonal, comunicación
 por eventos sobre Kafka, PostgreSQL, frontend en React y todo en contenedores.
 
-El objetivo del repositorio no es el dominio: es el **stack de pruebas**. Hay 281
+El objetivo del repositorio no es el dominio: es el **stack de pruebas**. Hay 285
 pruebas repartidas en seis niveles, desde reglas de negocio puras hasta recorridos de
 usuario en un navegador real.
 

@@ -147,7 +147,9 @@ mensaje. Existe por tanto una ventana en la que el trabajo ya está hecho pero l
 posición aún no está confirmada: si el proceso muere ahí, al arrancar **reprocesa**
 esos mensajes.
 
-Por eso los handlers son idempotentes por diseño:
+Por eso **los dos consumidores son idempotentes por diseño**, cada uno a su manera.
+
+Fleet compara contra el estado actual:
 
 ```csharp
 if (vehicle.Available == available.Value)
@@ -156,7 +158,25 @@ if (vehicle.Available == available.Value)
 }
 ```
 
-Y por eso existe la prueba `Reprocessing_the_same_event_changes_nothing`.
+Notifications deduplica por identidad del evento. El `EventId` viaja en el mensaje y
+en la cabecera `event-id`, y es estable entre reprocesos, así que se usa como Id de la
+notificación:
+
+```csharp
+private static Notification Build(IIntegrationEvent source, ...) =>
+    new(source.EventId, rentalId, customerId, source.EventType, message, source.OccurredAt);
+```
+
+```csharp
+return Task.FromResult(_notifications.TryAdd(notification.Id, notification));   // false si ya estaba
+```
+
+Puedes comprobarlo en el sistema desplegado: el `id` que devuelve
+`GET /api/notifications` coincide exactamente con la cabecera `event-id` del mensaje
+en Kafka.
+
+Cubierto por `Reprocessing_the_same_event_changes_nothing` (Fleet) y
+`Reprocessing_the_same_event_stores_a_single_notification` (Notifications).
 
 ---
 
