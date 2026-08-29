@@ -8,6 +8,8 @@ builder.Services.AddProblemDetails();
 builder.Services.Configure<KafkaConsumerOptions>(builder.Configuration.GetSection(KafkaConsumerOptions.SectionName));
 builder.Services.AddSingleton<INotificationStore, InMemoryNotificationStore>();
 builder.Services.AddSingleton<INotificationIngestor, NotificationIngestor>();
+builder.Services.AddSingleton<ConsumerReadiness>();
+builder.Services.AddHealthChecks().AddCheck<KafkaConsumerHealthCheck>("kafka-consumer", tags: ["ready"]);
 builder.Services.AddHostedService<RentalEventsConsumer>();
 
 builder.Services.AddCors(options => options.AddPolicy(
@@ -21,7 +23,7 @@ app.UseCors("frontend");
 app.MapOpenApi();
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "notifications" }));
-app.MapGet("/health/ready", () => Results.Ok(new { status = "Healthy" }));
+app.MapHealthChecks("/health/ready");
 
 app.MapGet("/api/notifications", async (Guid? customerId, INotificationStore store, CancellationToken ct) =>
     Results.Ok(await store.ListAsync(customerId, ct)));

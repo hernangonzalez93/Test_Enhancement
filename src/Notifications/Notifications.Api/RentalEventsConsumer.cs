@@ -1,5 +1,6 @@
 using System.Text;
 using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 using Microsoft.Extensions.Options;
 using Shared.Contracts;
 
@@ -26,27 +27,41 @@ public sealed class KafkaConsumerOptions
 public sealed class RentalEventsConsumer(
     IOptions<KafkaConsumerOptions> options,
     INotificationIngestor ingestor,
+    ConsumerReadiness readiness,
     ILogger<RentalEventsConsumer> logger) : BackgroundService
 {
     private readonly KafkaConsumerOptions _options = options.Value;
+
+    private Thread? _worker;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_options.Enabled)
         {
             logger.LogInformation("Kafka consumer disabled by configuration.");
+            // Apagado por configuracion: no hay nada que esperar.
+            readiness.MarkReady();
             return Task.CompletedTask;
         }
 
-        return Task.Factory.StartNew(
-            () => ConsumeLoop(stoppingToken),
-            stoppingToken,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default);
+        // Hilo dedicado y bucle sincrono. Ver el comentario equivalente en
+        // Fleet.Api: con un lambda async, el Consume() bloqueante acaba
+        // ejecutandose sobre el thread pool y se detiene cuando el pool se agota.
+        _worker = new Thread(() => ConsumeLoop(stoppingToken))
+        {
+            IsBackground = true,
+            Name = "notifications-rental-events-consumer"
+        };
+
+        _worker.Start();
+
+        return Task.CompletedTask;
     }
 
-    private async Task ConsumeLoop(CancellationToken stoppingToken)
+    private void ConsumeLoop(CancellationToken stoppingToken)
     {
+        EnsureTopicExists();
+
         var config = new ConsumerConfig
         {
             BootstrapServers = _options.BootstrapServers,
@@ -58,6 +73,15 @@ public sealed class RentalEventsConsumer(
 
         using var consumer = new ConsumerBuilder<string, string>(config)
             .SetErrorHandler((_, error) => logger.LogWarning("Kafka error: {Reason}", error.Reason))
+            .SetPartitionsAssignedHandler((_, partitions) =>
+            {
+                // Recibir particiones es la primera prueba de que este
+                // consumidor va a ver mensajes. Hasta aqui, /health/ready falla.
+                readiness.MarkReady();
+                logger.LogInformation(
+                    "Partitions assigned: {Partitions}",
+                    string.Join(", ", partitions.Select(partition => partition.Partition.Value)));
+            })
             .Build();
 
         consumer.Subscribe(_options.Topic);
@@ -87,11 +111,16 @@ public sealed class RentalEventsConsumer(
                     continue;
                 }
 
-                await ingestor.IngestAsync(integrationEvent, stoppingToken);
+                ingestor.IngestAsync(integrationEvent, stoppingToken).GetAwaiter().GetResult();
             }
             catch (OperationCanceledException)
             {
                 break;
+            }
+            catch (ConsumeException exception)
+            {
+                logger.LogWarning("Kafka consume error: {Reason}", exception.Error.Reason);
+                Thread.Sleep(500);
             }
             catch (Exception exception)
             {
@@ -101,4 +130,55 @@ public sealed class RentalEventsConsumer(
 
         consumer.Close();
     }
+
+    /// <summary>
+    /// Crea el topico si no existe, de forma idempotente.
+    ///
+    /// Sin esto, en un cluster recien arrancado nadie ha publicado todavia, el
+    /// topico no existe y el consumidor nunca recibe particiones: se queda
+    /// suscrito a la nada hasta que llega el primer mensaje. Depender de
+    /// `auto.create.topics.enable` no es una opcion seria porque en clusters
+    /// reales suele estar desactivado.
+    /// </summary>
+    private void EnsureTopicExists()
+    {
+        using var admin = new AdminClientBuilder(new AdminClientConfig
+        {
+            BootstrapServers = _options.BootstrapServers
+        }).Build();
+
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            try
+            {
+                admin.CreateTopicsAsync([
+                    new TopicSpecification
+                    {
+                        Name = _options.Topic,
+                        NumPartitions = 1,
+                        ReplicationFactor = 1
+                    }
+                ]).GetAwaiter().GetResult();
+
+                logger.LogInformation("Topic {Topic} created.", _options.Topic);
+                return;
+            }
+            catch (CreateTopicsException exception)
+                when (exception.Results.All(result => result.Error.Code == ErrorCode.TopicAlreadyExists))
+            {
+                logger.LogInformation("Topic {Topic} already exists.", _options.Topic);
+                return;
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(
+                    exception,
+                    "Could not ensure topic {Topic} (attempt {Attempt}/5).",
+                    _options.Topic,
+                    attempt);
+                Thread.Sleep(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
+
 }

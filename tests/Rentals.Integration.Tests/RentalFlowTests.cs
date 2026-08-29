@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using Confluent.Kafka;
-using Fleet.Api;
 using Microsoft.EntityFrameworkCore;
 using Notifications.Api;
 using Rentals.Api.Endpoints;
@@ -17,6 +16,11 @@ namespace Rentals.Integration.Tests;
 /// Pricing. Estas pruebas son las unicas capaces de detectar fallos de
 /// cableado: una cadena de conexion mal formada, un topico distinto entre
 /// productor y consumidor, o un mapeo de EF que solo falla contra PostgreSQL.
+///
+/// Aislamiento: cada prueba crea su propio vehiculo con
+/// <see cref="IntegrationFixture.CreateVehicleAsync"/>. Compartir la flota
+/// sembrada acoplaba las pruebas a traves del consumidor de Kafka de Fleet,
+/// que sigue vivo entre una prueba y la siguiente.
 /// </summary>
 [Collection(IntegrationCollection.Name)]
 public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
@@ -29,18 +33,18 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
 
     private static readonly DateTimeOffset Start = DateTimeOffset.UtcNow.AddDays(10);
 
-    private static CreateRentalRequest Request(Guid? customerId = null, Guid? vehicleId = null, int days = 3) => new(
+    private static CreateRentalRequest Request(Guid vehicleId, Guid? customerId = null, int days = 3) => new(
         customerId ?? Guid.NewGuid(),
-        vehicleId ?? FleetSeed.EconomyVehicleId,
+        vehicleId,
         Start,
         Start.AddDays(days),
         "LIC-12345",
         Start.AddYears(2),
         []);
 
-    private async Task<RentalDto> CreateRentalAsync(CreateRentalRequest? request = null)
+    private async Task<RentalDto> CreateRentalAsync(CreateRentalRequest request)
     {
-        var response = await _client.PostAsJsonAsync("/api/rentals", request ?? Request());
+        var response = await _client.PostAsJsonAsync("/api/rentals", request);
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         return (await response.Content.ReadFromJsonAsync<RentalDto>()).ShouldNotBeNull();
@@ -49,7 +53,9 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Requesting_a_rental_writes_a_row_in_postgresql()
     {
-        var dto = await CreateRentalAsync();
+        var vehicleId = await fixture.CreateVehicleAsync();
+
+        var dto = await CreateRentalAsync(Request(vehicleId));
 
         await using var context = fixture.CreateRentalsContext();
         var stored = await context.Rentals.SingleAsync(r => r.Id == RentalId.From(dto.Id));
@@ -63,8 +69,9 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     public async Task The_rate_comes_from_the_pricing_service_over_http()
     {
         fixture.PricingDailyRate = 77m;
+        var vehicleId = await fixture.CreateVehicleAsync();
 
-        var dto = await CreateRentalAsync();
+        var dto = await CreateRentalAsync(Request(vehicleId));
 
         dto.DailyRate.ShouldBe(77m);
         dto.EstimatedTotal.ShouldBe(231m);
@@ -73,9 +80,11 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task The_vehicle_data_comes_from_the_real_fleet_service()
     {
-        // Fleet solo conoce estos ids; si el adaptador HTTP no llegara al
-        // servicio real, la peticion terminaria en 404.
-        var response = await _client.PostAsJsonAsync("/api/rentals", Request(vehicleId: FleetSeed.LuxuryVehicleId));
+        // El vehiculo se da de alta en Fleet y se renta acto seguido: si el
+        // adaptador HTTP no llegara al servicio real, la peticion seria 404.
+        var vehicleId = await fixture.CreateVehicleAsync("luxury", dailyRate: 120m);
+
+        var response = await _client.PostAsJsonAsync("/api/rentals", Request(vehicleId));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
@@ -83,7 +92,7 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task An_unknown_vehicle_is_reported_as_404_end_to_end()
     {
-        var response = await _client.PostAsJsonAsync("/api/rentals", Request(vehicleId: Guid.NewGuid()));
+        var response = await _client.PostAsJsonAsync("/api/rentals", Request(Guid.NewGuid()));
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await response.Content.ReadAsStringAsync()).ShouldContain("vehicle.not_found");
@@ -92,10 +101,10 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_second_rental_overlapping_the_same_vehicle_is_rejected_with_409()
     {
-        var vehicleId = FleetSeed.SuvVehicleId;
-        await CreateRentalAsync(Request(vehicleId: vehicleId, days: 5));
+        var vehicleId = await fixture.CreateVehicleAsync();
+        await CreateRentalAsync(Request(vehicleId, days: 5));
 
-        var response = await _client.PostAsJsonAsync("/api/rentals", Request(vehicleId: vehicleId, days: 2));
+        var response = await _client.PostAsJsonAsync("/api/rentals", Request(vehicleId, days: 2));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await response.Content.ReadAsStringAsync()).ShouldContain("rental.overlapping");
@@ -105,8 +114,9 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     public async Task When_pricing_is_down_the_api_answers_503()
     {
         fixture.PricingIsDown = true;
+        var vehicleId = await fixture.CreateVehicleAsync();
 
-        var response = await _client.PostAsJsonAsync("/api/rentals", Request());
+        var response = await _client.PostAsJsonAsync("/api/rentals", Request(vehicleId));
 
         response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
         (await response.Content.ReadAsStringAsync()).ShouldContain("pricing.unavailable");
@@ -115,7 +125,9 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Requesting_a_rental_publishes_the_event_on_kafka()
     {
-        var dto = await CreateRentalAsync();
+        var vehicleId = await fixture.CreateVehicleAsync();
+
+        var dto = await CreateRentalAsync(Request(vehicleId));
 
         var messages = ConsumeEventsFor(dto.Id, expected: 1);
 
@@ -125,7 +137,8 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Each_transition_publishes_its_event_while_the_business_rules_stay_alive()
     {
-        var dto = await CreateRentalAsync(Request(vehicleId: FleetSeed.CompactVehicleId));
+        var vehicleId = await fixture.CreateVehicleAsync();
+        var dto = await CreateRentalAsync(Request(vehicleId));
 
         (await _client.PostAsync($"/api/rentals/{dto.Id}/confirm", null)).EnsureSuccessStatusCode();
 
@@ -142,14 +155,17 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Confirming_a_rental_makes_fleet_mark_the_vehicle_as_unavailable()
     {
-        var dto = await CreateRentalAsync(Request(vehicleId: FleetSeed.LuxuryVehicleId));
+        var vehicleId = await fixture.CreateVehicleAsync();
+        var dto = await CreateRentalAsync(Request(vehicleId));
+
         (await _client.PostAsync($"/api/rentals/{dto.Id}/confirm", null)).EnsureSuccessStatusCode();
 
+        // El vehiculo es exclusivo de esta prueba, asi que su disponibilidad
+        // solo puede cambiarla el evento que acaba de publicarse.
         var updated = await IntegrationFixture.EventuallyAsync(async () =>
         {
             await using var context = fixture.CreateFleetContext();
-            var vehicle = await context.Vehicles.AsNoTracking()
-                .SingleAsync(v => v.Id == FleetSeed.LuxuryVehicleId);
+            var vehicle = await context.Vehicles.AsNoTracking().SingleAsync(v => v.Id == vehicleId);
             return !vehicle.Available;
         });
 
@@ -160,7 +176,9 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     public async Task Confirming_a_rental_produces_a_notification_in_the_notifications_service()
     {
         var customerId = Guid.NewGuid();
-        var dto = await CreateRentalAsync(Request(customerId: customerId, vehicleId: FleetSeed.EconomyVehicleId));
+        var vehicleId = await fixture.CreateVehicleAsync();
+        var dto = await CreateRentalAsync(Request(vehicleId, customerId));
+
         (await _client.PostAsync($"/api/rentals/{dto.Id}/confirm", null)).EnsureSuccessStatusCode();
 
         using var notificationsClient = fixture.NotificationsClient;
@@ -180,7 +198,9 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Cancelling_a_rental_persists_the_refund_and_publishes_it()
     {
-        var dto = await CreateRentalAsync(Request(vehicleId: FleetSeed.CompactVehicleId));
+        var vehicleId = await fixture.CreateVehicleAsync();
+        var dto = await CreateRentalAsync(Request(vehicleId));
+
         (await _client.PostAsync($"/api/rentals/{dto.Id}/confirm", null)).EnsureSuccessStatusCode();
 
         var response = await _client.PostAsync($"/api/rentals/{dto.Id}/cancel", null);
@@ -198,9 +218,9 @@ public sealed class RentalFlowTests(IntegrationFixture fixture) : IAsyncLifetime
     public async Task Listing_by_customer_returns_what_was_persisted()
     {
         var customerId = Guid.NewGuid();
-        await CreateRentalAsync(Request(customerId: customerId, vehicleId: FleetSeed.EconomyVehicleId));
-        await CreateRentalAsync(Request(customerId: customerId, vehicleId: FleetSeed.SuvVehicleId));
-        await CreateRentalAsync(Request(vehicleId: FleetSeed.LuxuryVehicleId));
+        await CreateRentalAsync(Request(await fixture.CreateVehicleAsync(), customerId));
+        await CreateRentalAsync(Request(await fixture.CreateVehicleAsync(), customerId));
+        await CreateRentalAsync(Request(await fixture.CreateVehicleAsync()));
 
         var rentals = await _client.GetFromJsonAsync<List<RentalDto>>($"/api/rentals?customerId={customerId}");
 

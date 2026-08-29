@@ -102,7 +102,10 @@ services:
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      # /health/ready y no /health: incluye que el consumidor de Kafka ya tenga
+      # particiones asignadas. Asi `up --wait` no da el servicio por listo
+      # mientras todavia se esta uniendo a su grupo de consumo.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

@@ -65,9 +65,9 @@ permite que el 60 % de las pruebas no necesiten Docker.
 | 6 | `Rentals.Infrastructure.Tests` | Adaptadores | 33 | 37 | SQL, mapeo EF, Kafka, HTTP, reintentos | Docker | 44 s |
 | 7 | `Fleet.Api.Tests` | Servicio completo | 14 | 14 | API + PostgreSQL + regla de disponibilidad | Docker | 25 s |
 | 8 | `Rentals.Integration.Tests` | Integración entre servicios | 12 | 12 | Que los tres servicios se entienden | Docker | 41 s |
-| 9 | `Smoke.Tests` | Humo | 8 | 12 | Que el despliegue está vivo y cableado | compose | 2 s |
+| 9 | `Smoke.Tests` | Humo | 8 | 13 | Que el despliegue está vivo y cableado | compose | 2 s |
 | 10 | `e2e/` (Playwright) | E2E | 12 | 12 | Recorridos de usuario reales | compose | 14 s |
-| | **Total** | | **224** | **280** | | | |
+| | **Total** | | **224** | **281** | | | |
 
 «Métodos» son los `[Fact]` / `[Theory]` escritos; «casos» son las ejecuciones reales,
 porque cada `[InlineData]` de un `[Theory]` cuenta como una prueba independiente en el
@@ -549,13 +549,17 @@ Por eso son pocas, rápidas y **no afirman reglas de negocio**.
 
 ```csharp
 app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
-app.MapHealthChecks("/health/ready");   // incluye la comprobación de PostgreSQL
+app.MapHealthChecks("/health/ready");   // PostgreSQL + consumidor de Kafka
 ```
 
 `/health` responde en cuanto el proceso vive; `/health/ready` solo cuando puede
-trabajar. Esa separación es la que hace útiles las pruebas de humo: distinguen
-«arrancó» de «funciona». También es lo que usa `docker compose --wait` para saber
-cuándo el servicio está listo de verdad.
+trabajar. En Rentals y Fleet eso incluye que PostgreSQL sea accesible; en Fleet y
+Notifications, además, que su consumidor de Kafka tenga particiones asignadas.
+
+Esa separación es la que hace útiles las pruebas de humo: distinguen «arrancó» de
+«funciona». También es lo que usa `docker compose --wait`, y por eso la sonda tiene
+que ser honesta: cuando solo miraba HTTP, las E2E arrancaban contra consumidores que
+aún no consumían (ver los puntos 10 y 11 de la sección de errores reales).
 
 ### URLs configurables
 
@@ -748,7 +752,113 @@ property* propia, que además deja el dominio limpio.
 se reescribió con `Equals` explícito, y se añadió una prueba que documenta que
 comparar monedas distintas está prohibido.
 
-**8. Las fechas aleatorias de las E2E se salían de la vigencia de la licencia.**
+**8. Un consumidor de Kafka que perdía su hilo bajo carga.**
+Los `BackgroundService` de Fleet y Notifications arrancaban su bucle así:
+
+```csharp
+return Task.Factory.StartNew(
+    () => ConsumeLoopAsync(stoppingToken),   // ← lambda async
+    stoppingToken,
+    TaskCreationOptions.LongRunning,
+    TaskScheduler.Default);
+```
+
+`LongRunning` reserva un hilo dedicado, pero con un lambda **async** ese hilo solo
+ejecuta hasta el primer `await`. A partir del primer mensaje, el `Consume()`
+bloqueante pasaba a ejecutarse sobre hilos del **thread pool**. Cuando
+`dotnet test` corre todos los proyectos en paralelo, el pool se satura, y como
+inyecta hilos nuevos a razón de aproximadamente uno por segundo, el consumidor se
+quedaba parado durante decenas de segundos.
+
+El síntoma era desconcertante:
+`Confirming_a_rental_makes_fleet_mark_the_vehicle_as_unavailable` fallaba de forma
+intermitente **solo en la suite completa** y pasaba siempre en aislamiento. La pista
+definitiva fue que el consumidor *de la propia prueba* (`ConsumeEventsFor`, que corre
+en el hilo del test) sí recibía el evento, mientras que el consumidor *en segundo
+plano* no: la única diferencia entre ambos era de dónde salía su hilo.
+
+La corrección es que un consumidor de Kafka sea dueño de su hilo, con el bucle
+completamente síncrono:
+
+```csharp
+_worker = new Thread(() => ConsumeLoop(stoppingToken))
+{
+    IsBackground = true,
+    Name = "fleet-rental-events-consumer"
+};
+_worker.Start();
+```
+
+Dentro del bucle, `handler.HandleAsync(...).GetAwaiter().GetResult()` es seguro
+porque el hilo es propio y no hay `SynchronizationContext`.
+
+**9. Truncar una tabla que un consumidor está escribiendo.**
+`ResetAsync` vaciaba `fleet.vehicles` antes de cada prueba de integración, mientras
+el consumidor de Fleet seguía vivo procesando eventos de la prueba anterior. Si su
+`SaveChangesAsync` caía después del `TRUNCATE`, EF veía cero filas afectadas y
+lanzaba `DbUpdateConcurrencyException`; el consumidor la registraba y seguía, pero
+con `EnableAutoCommit = true` el offset ya había avanzado y la actualización se
+perdía. Ahora solo se vacía `rentals.rentals`, que nadie escribe en segundo plano, y
+**cada prueba de integración crea su propio vehículo** a través de la API de Fleet —
+el mismo criterio que ya seguía la suite E2E.
+
+**10. `/health/ready` mentía en un servicio dirigido por eventos.**
+Fleet y Notifications respondían «listo» en cuanto PostgreSQL era accesible, sin
+decir nada sobre su consumidor de Kafka. `docker compose up -d --wait` daba la pila
+por levantada y las E2E arrancaban contra consumidores que todavía se estaban uniendo
+a su grupo: se midieron **13,4 s** entre publicar un evento y procesarlo. Ahora ambos
+servicios exponen un `IHealthCheck` que solo pasa cuando el consumidor ha recibido
+particiones:
+
+```csharp
+.SetPartitionsAssignedHandler((_, partitions) =>
+{
+    readiness.MarkReady();
+    ...
+})
+```
+
+y el `healthcheck` de compose apunta a `/health/ready`. Una sonda de readiness debe
+significar «puede trabajar», y en un sistema por eventos eso incluye estar
+consumiendo.
+
+**11. El topic no existía hasta que alguien publicaba.**
+La corrección anterior destapó un problema de fondo: en un clúster recién arrancado
+nadie ha publicado todavía, el topic no existe, y el consumidor queda suscrito a la
+nada sin recibir particiones nunca. Antes esto pasaba inadvertido porque la sonda no
+lo miraba. Depender de `auto.create.topics.enable` no es una opción seria: en
+clústeres reales suele estar desactivado. Ahora cada consumidor crea su topic de
+forma idempotente antes de suscribirse:
+
+```csharp
+admin.CreateTopicsAsync([new TopicSpecification { Name = _options.Topic, ... }])
+     .GetAwaiter().GetResult();
+// ...
+catch (CreateTopicsException e) when (e.Results.All(r => r.Error.Code == ErrorCode.TopicAlreadyExists))
+```
+
+Un arranque en frío pasó de **fallar a los 2 m 37 s** a estar sano en **45 s**, con
+las E2E en verde ejecutadas inmediatamente después.
+
+**12. nginx resuelve los upstreams una sola vez.**
+Tras reconstruir `fleet-api` y `notifications-api`, el proxy devolvía **404 con
+cuerpo vacío** mientras los servicios respondían 200 directamente. nginx resuelve los
+nombres al cargar la configuración; al recrearse los contenedores cambian de IP, y
+como Docker las recicla, las peticiones acababan en otro contenedor —de ahí el 404 en
+lugar del 502 que uno esperaría. La corrección es un `resolver` apuntando al DNS
+embebido de Docker más una variable en `proxy_pass`, que fuerza a resolver en cada
+petición:
+
+```nginx
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+location /api/vehicles {
+    set $upstream_fleet fleet-api;
+    proxy_pass http://$upstream_fleet:8080$request_uri;
+}
+```
+
+**13. Las fechas aleatorias de las E2E se salían de la vigencia de la licencia.**
 La suite fallaba con `rental.license_expired`, un error real del dominio pero ajeno a
 lo que la prueba quería demostrar. Los datos generados deben mantenerse dentro del
 rango válido de **todas** las reglas, no solo de la que se está probando.

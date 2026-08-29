@@ -56,12 +56,20 @@ public sealed class SmokeTests : IDisposable
     [Theory]
     [InlineData("rentals")]
     [InlineData("fleet")]
-    public async Task Services_with_a_database_answer_their_readiness_probe(string service)
+    [InlineData("notifications")]
+    public async Task Every_service_answers_its_readiness_probe(string service)
     {
-        var baseUrl = service == "rentals" ? RentalsUrl : FleetUrl;
+        var baseUrl = service switch
+        {
+            "rentals" => RentalsUrl,
+            "fleet" => FleetUrl,
+            _ => NotificationsUrl
+        };
 
-        // /health/ready solo responde 200 si PostgreSQL esta accesible:
-        // demuestra que la cadena de conexion del contenedor es correcta.
+        // /health/ready es mas exigente que /health: solo responde 200 si el
+        // servicio puede TRABAJAR. En Rentals y Fleet incluye que PostgreSQL
+        // sea accesible; en Fleet y Notifications, ademas, que su consumidor de
+        // Kafka ya tenga particiones asignadas.
         (await _client.GetAsync($"{baseUrl}/health/ready")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 

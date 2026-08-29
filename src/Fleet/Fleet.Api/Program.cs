@@ -13,10 +13,12 @@ builder.Services.AddDbContext<FleetDbContext>(options =>
 
 builder.Services.Configure<KafkaConsumerOptions>(builder.Configuration.GetSection(KafkaConsumerOptions.SectionName));
 builder.Services.AddScoped<IVehicleAvailabilityHandler, VehicleAvailabilityHandler>();
+builder.Services.AddSingleton<ConsumerReadiness>();
 builder.Services.AddHostedService<RentalEventsConsumer>();
 
 builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("FleetDatabase") ?? string.Empty, name: "postgres", tags: ["ready"]);
+    .AddNpgSql(builder.Configuration.GetConnectionString("FleetDatabase") ?? string.Empty, name: "postgres", tags: ["ready"])
+    .AddCheck<KafkaConsumerHealthCheck>("kafka-consumer", tags: ["ready"]);
 
 builder.Services.AddCors(options => options.AddPolicy(
     "frontend",

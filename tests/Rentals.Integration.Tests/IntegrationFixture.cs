@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using Fleet.Api;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -104,17 +106,54 @@ public sealed class IntegrationFixture : IAsyncLifetime
             .UseNpgsql(_postgres.GetConnectionString())
             .Options);
 
+    /// <summary>
+    /// Aislamiento entre pruebas.
+    ///
+    /// Solo se vacia `rentals.rentals`, que nadie escribe en segundo plano.
+    /// `fleet.vehicles` NO se toca a proposito: el consumidor de Kafka de Fleet
+    /// esta vivo durante toda la coleccion y procesa los eventos de una prueba
+    /// mientras ya corre la siguiente. Truncar esa tabla desde el hilo de la
+    /// prueba producia una carrera real: el consumidor leia la fila, el TRUNCATE
+    /// la borraba, y su SaveChangesAsync fallaba con DbUpdateConcurrencyException
+    /// (cero filas afectadas). El consumidor traga la excepcion y, como confirma
+    /// offsets automaticamente, ese evento se perdia. El sintoma era que
+    /// Confirming_a_rental_makes_fleet_mark_the_vehicle_as_unavailable fallaba de
+    /// forma intermitente.
+    ///
+    /// En su lugar, cada prueba que necesita un vehiculo se crea el suyo con
+    /// <see cref="CreateVehicleAsync"/>. Es el mismo criterio que sigue la suite
+    /// E2E, y elimina la carrera en vez de intentar sincronizarla.
+    /// </summary>
     public async Task ResetAsync()
     {
         await using var rentals = CreateRentalsContext();
         await rentals.Database.ExecuteSqlRawAsync("TRUNCATE TABLE rentals.rentals;");
 
-        await using var fleet = CreateFleetContext();
-        await fleet.Database.ExecuteSqlRawAsync("TRUNCATE TABLE fleet.vehicles;");
-        await FleetSeed.EnsureSeededAsync(fleet);
-
         PricingDailyRate = 50m;
         PricingIsDown = false;
+    }
+
+    /// <summary>
+    /// Crea un vehiculo nuevo llamando a la API real de Fleet. Al ser exclusivo
+    /// de la prueba, ningun evento de otra prueba puede alterar su disponibilidad.
+    /// </summary>
+    public async Task<Guid> CreateVehicleAsync(string vehicleClass = "economy", decimal dailyRate = 40m)
+    {
+        using var client = FleetApp.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/vehicles", new
+        {
+            model = "Integracion " + vehicleClass,
+            vehicleClass,
+            licensePlate = "IT-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+            dailyRate,
+            currency = "USD"
+        });
+
+        response.StatusCode.ShouldBe(System.Net.HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        return created.GetProperty("id").GetGuid();
     }
 
     /// <summary>Tarifa diaria que devuelve el Pricing simulado.</summary>

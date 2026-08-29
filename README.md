@@ -3,7 +3,7 @@
 Sistema de **renta de vehículos** en .NET 10 con arquitectura hexagonal, comunicación
 por eventos sobre Kafka, PostgreSQL, frontend en React y todo en contenedores.
 
-El objetivo del repositorio no es el dominio: es el **stack de pruebas**. Hay 280
+El objetivo del repositorio no es el dominio: es el **stack de pruebas**. Hay 281
 pruebas repartidas en seis niveles, desde reglas de negocio puras hasta recorridos de
 usuario en un navegador real.
 
@@ -147,6 +147,11 @@ devuelve `Result.Failure("rental.overlapping", …)`, que la API traduce a 409 e
 
 - Las migraciones se aplican al arrancar el contenedor (`Database__AutoMigrate=true`).
   Bajo `WebApplicationFactory` está desactivado a propósito.
+- `/health/ready` de Fleet y Notifications solo pasa cuando su consumidor de Kafka ha
+  recibido particiones, así que `docker compose up -d --wait` espera a que el sistema
+  esté realmente consumiendo antes de devolver el control.
+- Cada consumidor crea el topic `rental-events` de forma idempotente al arrancar, sin
+  depender de `auto.create.topics.enable`.
 - Fleet siembra ocho vehículos con identificadores fijos, para que las pruebas de humo
   y E2E puedan referenciarlos.
 - Para reiniciar los datos: `docker compose down -v && docker compose up -d --wait`.
