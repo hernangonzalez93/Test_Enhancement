@@ -13,6 +13,9 @@ public sealed record CreateRentalRequest(
     DateTimeOffset LicenseExpiresOn,
     IReadOnlyList<string>? Extras);
 
+/// <summary>Nueva fecha de fin para prorrogar una renta.</summary>
+public sealed record ExtendRentalRequest(DateTimeOffset PeriodEnd);
+
 /// <summary>
 /// Adaptador de entrada (driving adapter). No contiene reglas: valida la forma
 /// del mensaje, delega en el puerto de aplicacion y traduce el resultado a HTTP.
@@ -28,6 +31,7 @@ public static class RentalEndpoints
         group.MapGet("/", ListAsync);
         group.MapPost("/{id:guid}/confirm", ConfirmAsync);
         group.MapPost("/{id:guid}/cancel", CancelAsync);
+        group.MapPost("/{id:guid}/extend", ExtendAsync);
         group.MapPost("/{id:guid}/start", StartAsync);
         group.MapPost("/{id:guid}/complete", CompleteAsync);
 
@@ -98,6 +102,23 @@ public static class RentalEndpoints
         IRentalService rentalService,
         CancellationToken cancellationToken) =>
         ToHttp(await rentalService.CancelAsync(id, cancellationToken));
+
+    private static async Task<IResult> ExtendAsync(
+        Guid id,
+        ExtendRentalRequest request,
+        IRentalService rentalService,
+        CancellationToken cancellationToken)
+    {
+        if (request.PeriodEnd == default)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["periodEnd"] = ["periodEnd is required."]
+            });
+        }
+
+        return ToHttp(await rentalService.ExtendAsync(id, request.PeriodEnd, cancellationToken));
+    }
 
     private static async Task<IResult> StartAsync(
         Guid id,

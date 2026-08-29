@@ -13,6 +13,9 @@ export default defineConfig({
       '/api/vehicles': 'http://localhost:5103',
       '/api/notifications': 'http://localhost:5104',
       '/api/quotes': 'http://localhost:5102',
+      '/api/insurance': 'http://localhost:5106',
+      '/api/policies': 'http://localhost:5106',
+      '/api/invoices': 'http://localhost:5107',
       '/api/pricing': 'http://localhost:5102'
     }
   }

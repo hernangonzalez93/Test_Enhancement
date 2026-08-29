@@ -33,6 +33,40 @@ export interface Notification {
   createdAt: string
 }
 
+export interface Policy {
+  number: string
+  rentalId: string
+  customerId: string
+  coverage: string
+  premium: number
+  currency: string
+  validFrom: string
+  validTo: string
+  status: string
+  updatedAt: string
+}
+
+export interface InvoiceLine {
+  concept: string
+  amount: number
+}
+
+export interface Invoice {
+  id: string
+  number: string
+  rentalId: string
+  customerId: string
+  status: string
+  currency: string
+  subtotal: number
+  tax: number
+  total: number
+  lines: InvoiceLine[]
+  createdAt: string
+  issuedAt: string | null
+  paidAt: string | null
+}
+
 export interface CreateRentalRequest {
   customerId: string
   vehicleId: string
@@ -93,8 +127,26 @@ export const api = {
   cancelRental: (id: string) =>
     request<Rental>(`/api/rentals/${id}/cancel`, { method: 'POST' }),
 
+  extendRental: (id: string, periodEnd: string) =>
+    request<Rental>(`/api/rentals/${id}/extend`, {
+      method: 'POST',
+      body: JSON.stringify({ periodEnd })
+    }),
+
+  startRental: (id: string) =>
+    request<Rental>(`/api/rentals/${id}/start`, { method: 'POST' }),
+
+  completeRental: (id: string) =>
+    request<Rental>(`/api/rentals/${id}/complete`, { method: 'POST' }),
+
   listNotifications: (customerId: string) =>
-    request<Notification[]>(`/api/notifications?customerId=${customerId}`)
+    request<Notification[]>(`/api/notifications?customerId=${customerId}`),
+
+  listPolicies: (rentalId: string) =>
+    request<Policy[]>(`/api/policies?rentalId=${rentalId}`),
+
+  listInvoices: (rentalId: string) =>
+    request<Invoice[]>(`/api/invoices?rentalId=${rentalId}`)
 }
 
 /** El cliente se guarda en el navegador para simular una sesion sin login. */
@@ -107,12 +159,6 @@ export function currentCustomerId(): string {
     localStorage.setItem(CUSTOMER_KEY, id)
   }
 
-  return id
-}
-
-export function resetCustomer(): string {
-  const id = crypto.randomUUID()
-  localStorage.setItem(CUSTOMER_KEY, id)
   return id
 }
 
@@ -129,4 +175,17 @@ export function toDateInputValue(iso: string): string {
 
 export function fromDateInputValue(value: string): string {
   return new Date(`${value}T10:00:00.000Z`).toISOString()
+}
+
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC'
+  })
+}
+
+export function formatMoney(amount: number, currency: string): string {
+  return `${amount.toFixed(2)} ${currency}`
 }

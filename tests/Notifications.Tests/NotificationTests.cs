@@ -126,7 +126,7 @@ public sealed class NotificationFactoryTests
     {
         var notification = NotificationFactory.From(
             new RentalCancelledIntegrationEvent(
-                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 75m, 50m, "USD", Now));
+                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 150m, 75m, 50m, "USD", Now));
 
         notification.ShouldNotBeNull();
         notification.Message.ShouldContain("75.00 USD");

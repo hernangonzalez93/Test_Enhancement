@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Sin dependencias, igual que Rentals.Domain. Es la garantia que hace que
+       sus pruebas sean puras y de milisegundos. -->
+</Project>

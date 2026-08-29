@@ -1,7 +1,16 @@
 <Solution>
   <Folder Name="/src/" />
+  <Folder Name="/src/Billing/">
+    <Project Path="src/Billing/Billing.Api/Billing.Api.csproj" />
+    <Project Path="src/Billing/Billing.Application/Billing.Application.csproj" />
+    <Project Path="src/Billing/Billing.Domain/Billing.Domain.csproj" />
+    <Project Path="src/Billing/Billing.Infrastructure/Billing.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Fleet/">
     <Project Path="src/Fleet/Fleet.Api/Fleet.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Insurances/">
+    <Project Path="src/Insurances/Insurances.Api/Insurances.Api.csproj" />
   </Folder>
   <Folder Name="/src/Notifications/">
     <Project Path="src/Notifications/Notifications.Api/Notifications.Api.csproj" />
@@ -19,7 +28,10 @@
     <Project Path="src/Shared/Shared.Contracts/Shared.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Billing.Application.Tests/Billing.Application.Tests.csproj" />
+    <Project Path="tests/Billing.Domain.Tests/Billing.Domain.Tests.csproj" />
     <Project Path="tests/Fleet.Api.Tests/Fleet.Api.Tests.csproj" />
+    <Project Path="tests/Insurances.Api.Tests/Insurances.Api.Tests.csproj" />
     <Project Path="tests/Notifications.Tests/Notifications.Tests.csproj" />
     <Project Path="tests/Pricing.Api.Tests/Pricing.Api.Tests.csproj" />
     <Project Path="tests/Rentals.Api.Tests/Rentals.Api.Tests.csproj" />

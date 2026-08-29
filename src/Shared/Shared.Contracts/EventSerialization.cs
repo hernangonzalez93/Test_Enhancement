@@ -32,6 +32,8 @@ public static class EventSerialization
             JsonSerializer.Deserialize<RentalStartedIntegrationEvent>(json, Options),
         IntegrationEventTypes.RentalCompleted =>
             JsonSerializer.Deserialize<RentalCompletedIntegrationEvent>(json, Options),
+        IntegrationEventTypes.RentalExtended =>
+            JsonSerializer.Deserialize<RentalExtendedIntegrationEvent>(json, Options),
         _ => null
     };
 }

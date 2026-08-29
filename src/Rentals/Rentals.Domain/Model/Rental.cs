@@ -145,7 +145,7 @@ public sealed class Rental : AggregateRoot<RentalId>
         CancelledAt = utcNow;
         RefundAmount = refund;
 
-        Raise(new RentalCancelled(Id, CustomerId, VehicleId, refund, percentage, utcNow));
+        Raise(new RentalCancelled(Id, CustomerId, VehicleId, EstimatedTotal, refund, percentage, utcNow));
     }
 
     /// <summary>Retiro del vehiculo. No se puede retirar antes de la hora pactada.</summary>
@@ -208,7 +208,7 @@ public sealed class Rental : AggregateRoot<RentalId>
         Period = extended;
         EstimatedTotal = DailyRate.Multiply(Period.TotalDays);
 
-        Raise(new RentalExtended(Id, CustomerId, Period.End, EstimatedTotal, now.ToUniversalTime()));
+        Raise(new RentalExtended(Id, CustomerId, VehicleId, Period.End, EstimatedTotal, now.ToUniversalTime()));
     }
 
     private void EnsureStatusIs(RentalStatus expected, string transition)

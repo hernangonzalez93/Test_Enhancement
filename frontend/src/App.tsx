@@ -2,6 +2,7 @@ import { Link, Route, Routes } from 'react-router-dom'
 import { VehiclesPage } from './pages/VehiclesPage'
 import { NewRentalPage } from './pages/NewRentalPage'
 import { RentalDetailPage } from './pages/RentalDetailPage'
+import { RentalsPage } from './pages/RentalsPage'
 import { currentCustomerId } from './api'
 
 export function App() {
@@ -16,6 +17,9 @@ export function App() {
           <Link data-testid="nav-new-rental" to="/new">
             Nueva renta
           </Link>
+          <Link data-testid="nav-rentals" to="/rentals">
+            Mis reservas
+          </Link>
         </nav>
         <p className="customer">
           Cliente: <span data-testid="customer-id">{currentCustomerId()}</span>
@@ -26,6 +30,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<VehiclesPage />} />
           <Route path="/new" element={<NewRentalPage />} />
+          <Route path="/rentals" element={<RentalsPage />} />
           <Route path="/rentals/:id" element={<RentalDetailPage />} />
         </Routes>
       </main>

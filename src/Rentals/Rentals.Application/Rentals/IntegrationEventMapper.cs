@@ -38,6 +38,7 @@ public static class IntegrationEventMapper
             e.RentalId.Value,
             e.CustomerId.Value,
             e.VehicleId.Value,
+            e.EstimatedTotal.Amount,
             e.RefundAmount.Amount,
             e.RefundPercentage,
             e.RefundAmount.Currency,
@@ -59,7 +60,15 @@ public static class IntegrationEventMapper
             e.FinalTotal.Currency,
             e.OccurredAt),
 
-        // RentalExtended es un evento puramente interno: no se publica.
+        RentalExtended e => new RentalExtendedIntegrationEvent(
+            e.RentalId.Value,
+            e.CustomerId.Value,
+            e.VehicleId.Value,
+            e.NewEnd,
+            e.NewEstimatedTotal.Amount,
+            e.NewEstimatedTotal.Currency,
+            e.OccurredAt),
+
         _ => null
     };
 }

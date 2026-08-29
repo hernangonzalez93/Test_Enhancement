@@ -27,6 +27,7 @@ public sealed record RentalCancelled(
     RentalId RentalId,
     CustomerId CustomerId,
     VehicleId VehicleId,
+    Money EstimatedTotal,
     Money RefundAmount,
     decimal RefundPercentage,
     DateTimeOffset OccurredAt) : IDomainEvent;
@@ -49,6 +50,7 @@ public sealed record RentalCompleted(
 public sealed record RentalExtended(
     RentalId RentalId,
     CustomerId CustomerId,
+    VehicleId VehicleId,
     DateTimeOffset NewEnd,
     Money NewEstimatedTotal,
     DateTimeOffset OccurredAt) : IDomainEvent;

@@ -208,6 +208,35 @@ public sealed class RentalsEndpointsTests(RentalsApiFactory factory) : IClassFix
     }
 
     [Fact]
+    public async Task Extending_a_rental_returns_200_with_the_new_period()
+    {
+        var newEnd = FixedClock.DefaultNow.AddDays(15);
+        var dto = SampleDto(status: "Confirmed") with { PeriodEnd = newEnd, TotalDays = 5, EstimatedTotal = 250m };
+        factory.RentalService.ExtendAsync(dto.Id, newEnd, Arg.Any<CancellationToken>())
+            .Returns(Result<RentalDto>.Success(dto));
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/rentals/{dto.Id}/extend",
+            new ExtendRentalRequest(newEnd));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = (await response.Content.ReadFromJsonAsync<RentalDto>()).ShouldNotBeNull();
+        body.TotalDays.ShouldBe(5);
+        body.EstimatedTotal.ShouldBe(250m);
+    }
+
+    [Fact]
+    public async Task Extending_without_a_period_end_is_rejected_with_400()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/rentals/{Guid.CreateVersion7()}/extend",
+            new ExtendRentalRequest(default));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("periodEnd is required");
+    }
+
+    [Fact]
     public async Task Malformed_json_is_rejected_with_400()
     {
         var content = new StringContent("{ not json", Encoding.UTF8, "application/json");

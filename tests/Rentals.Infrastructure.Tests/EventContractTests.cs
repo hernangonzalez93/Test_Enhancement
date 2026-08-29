@@ -48,6 +48,26 @@ public sealed class EventContractTests
     }
 
     [Fact]
+    public void A_cancellation_carries_the_total_besides_the_refund()
+    {
+        // Billing necesita el total para calcular la penalizacion no reembolsada:
+        // con solo el porcentaje no se puede derivar cuando el reembolso es cero.
+        var now = DateTimeOffset.UtcNow;
+        var original = new RentalCancelledIntegrationEvent(
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), 300m, 150m, 50m, "USD", now);
+
+        var json = EventSerialization.Serialize(original);
+        using var document = JsonDocument.Parse(json);
+
+        document.RootElement.GetProperty("estimatedTotal").GetDecimal().ShouldBe(300m);
+        document.RootElement.GetProperty("refundAmount").GetDecimal().ShouldBe(150m);
+
+        EventSerialization.Deserialize(IntegrationEventTypes.RentalCancelled, json)
+            .ShouldBeOfType<RentalCancelledIntegrationEvent>()
+            .EstimatedTotal.ShouldBe(300m);
+    }
+
+    [Fact]
     public void Deserialize_dispatches_on_the_event_type()
     {
         var now = DateTimeOffset.UtcNow;
@@ -79,7 +99,7 @@ public sealed class EventContractTests
         [
             new RentalRequestedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), now, now, 1m, "USD", now),
             new RentalConfirmedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, "USD", now),
-            new RentalCancelledIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, 100m, "USD", now),
+            new RentalCancelledIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, 1m, 100m, "USD", now),
             new RentalStartedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), now, now),
             new RentalCompletedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, 0, "USD", now)
         ];

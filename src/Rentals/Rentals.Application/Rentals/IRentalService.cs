@@ -14,6 +14,9 @@ public interface IRentalService
 
     Task<Result<RentalDto>> CancelAsync(Guid rentalId, CancellationToken cancellationToken = default);
 
+    /// <summary>Prorroga la renta hasta una nueva fecha de fin.</summary>
+    Task<Result<RentalDto>> ExtendAsync(Guid rentalId, DateTimeOffset newEnd, CancellationToken cancellationToken = default);
+
     Task<Result<RentalDto>> StartAsync(Guid rentalId, CancellationToken cancellationToken = default);
 
     Task<Result<RentalDto>> CompleteAsync(Guid rentalId, CancellationToken cancellationToken = default);

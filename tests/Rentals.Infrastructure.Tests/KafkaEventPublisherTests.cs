@@ -74,7 +74,7 @@ public sealed class KafkaEventPublisherTests(KafkaFixture fixture)
         await PublishAsync(
             new RentalRequestedIntegrationEvent(rentalId, customerId, vehicleId, now, now.AddDays(3), 150m, "USD", now),
             new RentalConfirmedIntegrationEvent(rentalId, customerId, vehicleId, 150m, "USD", now),
-            new RentalCancelledIntegrationEvent(rentalId, customerId, vehicleId, 150m, 100m, "USD", now));
+            new RentalCancelledIntegrationEvent(rentalId, customerId, vehicleId, 150m, 150m, 100m, "USD", now));
 
         var types = Consume(3)
             .Select(m =>

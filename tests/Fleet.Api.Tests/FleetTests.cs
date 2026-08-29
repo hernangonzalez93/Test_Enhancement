@@ -148,7 +148,7 @@ public sealed class VehicleAvailabilityHandlerTests(FleetFixture fixture) : IAsy
             Guid.NewGuid(), Guid.NewGuid(), FleetSeed.CompactVehicleId, 90m, "USD", Now));
 
         var handled = await HandleAsync(new RentalCancelledIntegrationEvent(
-            Guid.NewGuid(), Guid.NewGuid(), FleetSeed.CompactVehicleId, 90m, 100m, "USD", Now));
+            Guid.NewGuid(), Guid.NewGuid(), FleetSeed.CompactVehicleId, 90m, 90m, 100m, "USD", Now));
 
         handled.ShouldBeTrue();
         (await IsAvailableAsync(FleetSeed.CompactVehicleId)).ShouldBeTrue();

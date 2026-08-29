@@ -18,6 +18,7 @@ public static class IntegrationEventTypes
     public const string RentalCancelled = "rental.cancelled";
     public const string RentalStarted = "rental.started";
     public const string RentalCompleted = "rental.completed";
+    public const string RentalExtended = "rental.extended";
 }
 
 /// <summary>Cabecera de Kafka que transporta el tipo de evento para enrutar sin deserializar.</summary>
@@ -76,6 +77,7 @@ public sealed record RentalCancelledIntegrationEvent(
     Guid RentalId,
     Guid CustomerId,
     Guid VehicleId,
+    decimal EstimatedTotal,
     decimal RefundAmount,
     decimal RefundPercentage,
     string Currency,
@@ -114,6 +116,22 @@ public sealed record RentalCompletedIntegrationEvent(
     public Guid EventId { get; init; } = Guid.CreateVersion7();
 
     public string EventType => IntegrationEventTypes.RentalCompleted;
+
+    public string PartitionKey => RentalId.ToString();
+}
+
+public sealed record RentalExtendedIntegrationEvent(
+    Guid RentalId,
+    Guid CustomerId,
+    Guid VehicleId,
+    DateTimeOffset NewPeriodEnd,
+    decimal NewEstimatedTotal,
+    string Currency,
+    DateTimeOffset OccurredAt) : IIntegrationEvent
+{
+    public Guid EventId { get; init; } = Guid.CreateVersion7();
+
+    public string EventType => IntegrationEventTypes.RentalExtended;
 
     public string PartitionKey => RentalId.ToString();
 }

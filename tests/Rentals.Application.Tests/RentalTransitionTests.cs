@@ -104,6 +104,33 @@ public sealed class RentalTransitionTests
     }
 
     [Fact]
+    public async Task Extend_moves_the_end_recomputes_the_total_and_publishes_it()
+    {
+        var start = FixedClock.DefaultNow.AddDays(10);
+        var rental = RentalBuilder.A().From(start).ForDays(3).WithDailyRate(50m).BuildConfirmed();
+        _harness.GivenStoredRental(rental);
+
+        var result = await _harness.Service.ExtendAsync(rental.Id.Value, start.AddDays(5));
+
+        result.Value.ShouldNotBeNull().TotalDays.ShouldBe(5);
+        result.Value.EstimatedTotal.ShouldBe(250m);
+        _harness.PublishedEvents().ShouldContain(e => e.EventType == IntegrationEventTypes.RentalExtended);
+    }
+
+    [Fact]
+    public async Task Extend_backwards_is_rejected_without_saving()
+    {
+        var start = FixedClock.DefaultNow.AddDays(10);
+        var rental = RentalBuilder.A().From(start).ForDays(3).BuildConfirmed();
+        _harness.GivenStoredRental(rental);
+
+        var result = await _harness.Service.ExtendAsync(rental.Id.Value, start.AddDays(1));
+
+        result.Error.Code.ShouldBe("rental.invalid_period");
+        await _harness.UnitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Get_maps_the_aggregate_into_a_dto()
     {
         var rental = RentalBuilder.A().WithDailyRate(60m).ForDays(2).Build();

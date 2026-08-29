@@ -120,6 +120,12 @@ public sealed class RentalService(
     public Task<Result<RentalDto>> CancelAsync(Guid rentalId, CancellationToken cancellationToken = default) =>
         MutateAsync(rentalId, static (rental, now) => rental.Cancel(now), cancellationToken);
 
+    public Task<Result<RentalDto>> ExtendAsync(
+        Guid rentalId,
+        DateTimeOffset newEnd,
+        CancellationToken cancellationToken = default) =>
+        MutateAsync(rentalId, (rental, now) => rental.Extend(newEnd, now), cancellationToken);
+
     public Task<Result<RentalDto>> StartAsync(Guid rentalId, CancellationToken cancellationToken = default) =>
         MutateAsync(rentalId, static (rental, now) => rental.Start(now), cancellationToken);
 

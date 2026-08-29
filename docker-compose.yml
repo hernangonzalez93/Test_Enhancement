@@ -134,6 +134,52 @@ services:
       timeout: 5s
       retries: 10
 
+  insurances-api:
+    build:
+      context: .
+      dockerfile: src/Insurances/Insurances.Api/Dockerfile
+    container_name: te-insurances
+    ports:
+      - "5106:8080"
+    environment:
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__Topic: rental-events
+      Kafka__GroupId: insurances-service
+      Kafka__Enabled: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  billing-api:
+    build:
+      context: .
+      dockerfile: src/Billing/Billing.Api/Dockerfile
+    container_name: te-billing
+    ports:
+      - "5107:8080"
+    environment:
+      ConnectionStrings__BillingDatabase: Host=postgres;Port=5432;Database=testenforce;Username=testenforce;Password=testenforce
+      Database__AutoMigrate: "true"
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__Topic: rental-events
+      Kafka__GroupId: billing-service
+      Kafka__Enabled: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
   rentals-api:
     build:
       context: .
@@ -182,6 +228,10 @@ services:
       fleet-api:
         condition: service_healthy
       notifications-api:
+        condition: service_healthy
+      insurances-api:
+        condition: service_healthy
+      billing-api:
         condition: service_healthy
     healthcheck:
       # 127.0.0.1 y no localhost: dentro del contenedor localhost resuelve

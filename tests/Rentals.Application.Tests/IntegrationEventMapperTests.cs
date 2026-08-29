@@ -38,13 +38,23 @@ public sealed class IntegrationEventMapperTests
     }
 
     [Fact]
-    public void Does_not_publish_the_internal_extended_event()
+    public void Publishes_the_extension_so_downstream_services_can_react()
     {
-        var rental = RentalBuilder.A().BuildConfirmed();
+        // Extender cambia la vigencia de la poliza en Insurances, asi que el
+        // evento tiene que salir del servicio: dejarlo interno desincronizaria
+        // a los consumidores.
+        var rental = RentalBuilder.A().WithDailyRate(50m).ForDays(3).BuildConfirmed();
         rental.ClearDomainEvents();
         rental.Extend(rental.Period.End.AddDays(2), FixedClock.DefaultNow);
 
-        IntegrationEventMapper.Map(rental.DomainEvents).ShouldBeEmpty();
+        var mapped = IntegrationEventMapper.Map(rental.DomainEvents)
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<RentalExtendedIntegrationEvent>();
+
+        mapped.RentalId.ShouldBe(rental.Id.Value);
+        mapped.VehicleId.ShouldBe(rental.VehicleId.Value);
+        mapped.NewPeriodEnd.ShouldBe(rental.Period.End);
+        mapped.NewEstimatedTotal.ShouldBe(250m);
     }
 
     [Fact]
