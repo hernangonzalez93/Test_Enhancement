@@ -10,6 +10,10 @@ usuario en un navegador real.
 > **Lee [`docs/TESTING.md`](docs/TESTING.md).** Es el documento principal: explica qué
 > se prueba en cada nivel, por qué ahí, cómo está implementado y qué errores reales
 > aparecieron al construirlo.
+>
+> Y [`docs/KAFKA.md`](docs/KAFKA.md) para entender la mensajería: cómo viaja un
+> evento, qué significan las piezas (topic, clave, offset, grupo de consumo) y cómo
+> observarlo todo mientras corre.
 
 ---
 
@@ -98,6 +102,7 @@ tests/
 frontend/                         React 19 + Vite, servido por nginx
 e2e/                              Playwright
 docs/TESTING.md                   Documento principal de la estrategia de pruebas
+docs/KAFKA.md                     Cómo funciona y cómo observar la mensajería
 ```
 
 ---

@@ -143,8 +143,9 @@ por proyecto y no una vez por prueba.
 | `Smoke.Tests` (13) | `docker compose up -d --wait` |
 | `e2e/` (12) | compose + Chromium |
 
-Estos no crean nada: verifican un despliegue que ya existe, con sus siete
-contenedores.
+Estos no crean nada: verifican un despliegue que ya existe, con sus ocho
+contenedores (siete servicios más Kafka UI, que es solo una herramienta de
+diagnóstico).
 
 #### Dos cosas que parecen contenedores y no lo son
 
@@ -615,6 +616,10 @@ Ojo con una limitación: las pruebas de Testcontainers levantan **su propio** br
 efímero en un puerto aleatorio, que no es el de compose. Kafka UI solo ve el clúster
 de `docker compose`, así que sirve para depurar el sistema desplegado y las pruebas de
 humo y E2E, no las de Testcontainers.
+
+El funcionamiento de la mensajería —el recorrido de un evento, qué significan clave,
+offset y grupo de consumo, y cómo leer el *lag*— está en
+[`KAFKA.md`](KAFKA.md).
 
 ### WireMock.Net para los clientes HTTP
 
