@@ -195,4 +195,7 @@ devuelve `Result.Failure("rental.overlapping", …)`, que la API traduce a 409 e
   y todo lo demás sigue igual. No declara `healthcheck` a propósito, para no añadir
   sus ~30 s de arranque a cada `up --wait`; si abres la página justo después de
   levantar la pila, puede tardar un poco en responder.
+- Todos los servicios llevan `restart: unless-stopped`, así que la pila vuelve sola
+  tras reiniciar Docker Desktop o la máquina. Sin esa política los contenedores salen
+  con código 255 y hay que levantarlos a mano.
 - Para reiniciar los datos: `docker compose down -v && docker compose up -d --wait`.

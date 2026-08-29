@@ -1,10 +1,16 @@
 name: testenforce
 
+# Todos los servicios llevan `restart: unless-stopped`. Sin esa politica, un
+# reinicio del motor de Docker deja la pila parada (los contenedores salen con
+# codigo 255) y hay que levantarla a mano. Con ella, el entorno de trabajo vuelve
+# solo tras reiniciar Docker Desktop o la maquina.
+
 services:
 
   postgres:
     image: postgres:17-alpine
     container_name: te-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: testenforce
       POSTGRES_USER: testenforce
@@ -25,6 +31,7 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.7.1
     container_name: te-kafka
+    restart: unless-stopped
     ports:
       - "59092:9092"
     environment:
@@ -55,6 +62,7 @@ services:
   kafka-ui:
     image: kafbat/kafka-ui:latest
     container_name: te-kafka-ui
+    restart: unless-stopped
     ports:
       # 5105 sigue el esquema 51xx del proyecto y evita el 8080, que suele estar
       # ocupado por otras pilas locales.
@@ -77,6 +85,7 @@ services:
       context: .
       dockerfile: src/Pricing/Pricing.Api/Dockerfile
     container_name: te-pricing
+    restart: unless-stopped
     ports:
       - "5102:8080"
     healthcheck:
@@ -90,6 +99,7 @@ services:
       context: .
       dockerfile: src/Fleet/Fleet.Api/Dockerfile
     container_name: te-fleet
+    restart: unless-stopped
     ports:
       - "5103:8080"
     environment:
@@ -115,6 +125,7 @@ services:
       context: .
       dockerfile: src/Notifications/Notifications.Api/Dockerfile
     container_name: te-notifications
+    restart: unless-stopped
     ports:
       - "5104:8080"
     environment:
@@ -139,6 +150,7 @@ services:
       context: .
       dockerfile: src/Insurances/Insurances.Api/Dockerfile
     container_name: te-insurances
+    restart: unless-stopped
     ports:
       - "5106:8080"
     environment:
@@ -160,6 +172,7 @@ services:
       context: .
       dockerfile: src/Billing/Billing.Api/Dockerfile
     container_name: te-billing
+    restart: unless-stopped
     ports:
       - "5107:8080"
     environment:
@@ -185,6 +198,7 @@ services:
       context: .
       dockerfile: src/Rentals/Rentals.Api/Dockerfile
     container_name: te-rentals
+    restart: unless-stopped
     ports:
       - "5101:8080"
     environment:
@@ -220,6 +234,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: te-frontend
+    restart: unless-stopped
     ports:
       - "5173:80"
     depends_on:
