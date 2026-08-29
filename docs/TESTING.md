@@ -99,6 +99,73 @@ usuario.
 - Docker Desktop (para Testcontainers y para `docker compose`)
 - Node 22 (frontend y Playwright)
 
+### Qué necesita cada prueba
+
+Conviene aclarar un malentendido habitual: **ninguna prueba corre *dentro* de un
+contenedor**. Todas se ejecutan en la máquina de desarrollo (`dotnet test`,
+`npm test`). Lo que cambia es su relación con la infraestructura, y hay tres grupos.
+
+**Grupo 1 — no necesitan nada (193 de 281 casos, el 69 %)**
+
+| Proyecto | Casos |
+|---|---|
+| `Rentals.Domain.Tests` | 96 |
+| `Rentals.Application.Tests` | 29 |
+| `Rentals.Api.Tests` | 27 |
+| `Pricing.Api.Tests` | 27 |
+| `Notifications.Tests` | 14 |
+
+Con Docker apagado corren igual, en unos 3 segundos en total. No es casualidad: es el
+retorno directo de la arquitectura hexagonal. El dominio no tiene dependencias y la
+aplicación solo conoce interfaces, así que dos tercios de la suite no tocan
+infraestructura.
+
+**Grupo 2 — levantan sus propios contenedores (63 casos)**
+
+Mediante Testcontainers, efímeros y creados por la propia prueba. Necesitan **Docker
+corriendo, pero no `docker compose`**.
+
+| Proyecto | Contenedores | Casos |
+|---|---|---|
+| `Rentals.Infrastructure.Tests` | PostgreSQL + Kafka | 37 |
+| `Fleet.Api.Tests` | PostgreSQL | 14 |
+| `Rentals.Integration.Tests` | PostgreSQL + Kafka | 12 |
+
+Son cinco contenedores si se lanza todo a la vez (los proyectos corren en paralelo),
+más un auxiliar `testcontainers/ryuk` que los limpia al terminar aunque el proceso
+muera. Se comparten por colección con `ICollectionFixture<>`, así que arrancan una vez
+por proyecto y no una vez por prueba.
+
+**Grupo 3 — necesitan la pila ya desplegada (25 casos)**
+
+| Proyecto | Requisito |
+|---|---|
+| `Smoke.Tests` (13) | `docker compose up -d --wait` |
+| `e2e/` (12) | compose + Chromium |
+
+Estos no crean nada: verifican un despliegue que ya existe, con sus siete
+contenedores.
+
+#### Dos cosas que parecen contenedores y no lo son
+
+**WireMock.Net** es un servidor HTTP **en proceso**, no un contenedor. Arranca en
+milisegundos sobre un puerto local aleatorio. Aparece en `Rentals.Infrastructure.Tests`
+y en `Rentals.Integration.Tests`, pero no suma ni un contenedor.
+
+**`WebApplicationFactory`** levanta la API **en memoria**, sin abrir un puerto TCP.
+Por eso `Pricing.Api.Tests`, `Notifications.Tests` y `Rentals.Api.Tests` prueban la
+API completa —enrutado, serialización, middlewares, validación— sin Docker.
+
+`Fleet.Api.Tests` usa las dos cosas a la vez: la API va en memoria (gratis) y solo
+PostgreSQL es un contenedor.
+
+#### Un detalle práctico
+
+Si se ejecuta `dotnet test` **sin** la pila levantada, los 269 casos pasan salvo los
+13 de `Smoke.Tests`, que fallan por conexión rechazada. Es el comportamiento
+esperado, no un fallo real: esas pruebas existen precisamente para comprobar un
+despliegue.
+
 ### Detalle importante: el runner de pruebas
 
 .NET 10 ya no admite ejecutar Microsoft.Testing.Platform a través de VSTest. Por eso
@@ -115,8 +182,12 @@ pruebas con xUnit v3 debe ser **ejecutable** (`OutputType=Exe`), cosa que
 
 ### Comandos
 
+`dotnet test` acepta **un solo** proyecto por invocación (posicional o con
+`--project`). Pasar varias rutas seguidas no da error visible: ejecuta la primera y
+se detiene, así que conviene una línea por proyecto.
+
 ```bash
-# Todo lo que no necesita Docker (rápido, ideal para el bucle de desarrollo)
+# Grupo 1 · bucle de desarrollo · ~3 s en total · Docker puede estar apagado
 dotnet test tests/Rentals.Domain.Tests
 dotnet test tests/Rentals.Application.Tests
 dotnet test tests/Rentals.Api.Tests
@@ -125,14 +196,14 @@ dotnet test tests/Notifications.Tests
 ```
 
 ```bash
-# Pruebas que levantan contenedores con Testcontainers
+# Grupo 2 · antes de commit · ~110 s · necesita Docker, NO compose
 dotnet test tests/Rentals.Infrastructure.Tests
 dotnet test tests/Fleet.Api.Tests
 dotnet test tests/Rentals.Integration.Tests
 ```
 
 ```bash
-# Toda la suite .NET (Smoke necesita la pila arriba)
+# Toda la suite .NET · Smoke.Tests necesita la pila levantada
 docker compose up -d --wait
 dotnet test
 ```
