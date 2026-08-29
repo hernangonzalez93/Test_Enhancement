@@ -599,6 +599,23 @@ message.Message.Headers.TryGetLastBytes(EventHeaders.EventType, out var typeByte
 Encoding.UTF8.GetString(typeBytes).ShouldBe(IntegrationEventTypes.RentalRequested);
 ```
 
+#### Cómo mirar lo que realmente se publicó
+
+Cuando una prueba sobre Kafka falla, la pregunta suele ser «¿se publicó de verdad, y
+con qué forma?». Con la pila levantada, **Kafka UI en http://localhost:5105** responde
+eso sin escribir una línea de código: muestra cada mensaje del topic `rental-events`
+con su clave de partición, sus cabeceras y su payload, y el estado de los dos grupos
+de consumo (`fleet-service` y `notifications-service`) con su *lag*.
+
+Es justo la vista que habría acortado el diagnóstico de los fallos 8 y 11 de la
+sección 12: un consumidor parado se ve al instante como un *lag* que crece, y un topic
+inexistente, como un topic que sencillamente no aparece en la lista.
+
+Ojo con una limitación: las pruebas de Testcontainers levantan **su propio** broker
+efímero en un puerto aleatorio, que no es el de compose. Kafka UI solo ve el clúster
+de `docker compose`, así que sirve para depurar el sistema desplegado y las pruebas de
+humo y E2E, no las de Testcontainers.
+
 ### WireMock.Net para los clientes HTTP
 
 `HttpAdapterTests` prueba la **traducción de protocolo**. La decisión de diseño que

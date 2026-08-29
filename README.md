@@ -26,6 +26,7 @@ docker compose up -d --wait
 | Pricing API | http://localhost:5102 |
 | Fleet API | http://localhost:5103 |
 | Notifications API | http://localhost:5104 |
+| Kafka UI | http://localhost:5105 |
 | PostgreSQL | `localhost:55432` · usuario/clave `testenforce` |
 | Kafka | `localhost:59092` |
 
@@ -154,4 +155,11 @@ devuelve `Result.Failure("rental.overlapping", …)`, que la API traduce a 409 e
   depender de `auto.create.topics.enable`.
 - Fleet siembra ocho vehículos con identificadores fijos, para que las pruebas de humo
   y E2E puedan referenciarlos.
+- **Kafka UI** (http://localhost:5105) permite inspeccionar el topic `rental-events`:
+  mensajes con su clave, cabeceras y payload, y el estado de los dos grupos de
+  consumo (`fleet-service` y `notifications-service`) con su *lag*. Es una
+  herramienta de diagnóstico, no parte del sistema: `docker compose stop kafka-ui`
+  y todo lo demás sigue igual. No declara `healthcheck` a propósito, para no añadir
+  sus ~30 s de arranque a cada `up --wait`; si abres la página justo después de
+  levantar la pila, puede tardar un poco en responder.
 - Para reiniciar los datos: `docker compose down -v && docker compose up -d --wait`.

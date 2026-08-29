@@ -48,6 +48,30 @@ services:
       timeout: 10s
       retries: 20
 
+  # Interfaz web para inspeccionar Kafka: topicos, particiones, grupos de consumo
+  # y el contenido real de cada mensaje (clave, cabeceras y payload).
+  # Es una herramienta de diagnostico, no forma parte del sistema: si molesta,
+  # `docker compose stop kafka-ui` y el resto sigue igual.
+  kafka-ui:
+    image: kafbat/kafka-ui:latest
+    container_name: te-kafka-ui
+    ports:
+      # 5105 sigue el esquema 51xx del proyecto y evita el 8080, que suele estar
+      # ocupado por otras pilas locales.
+      - "5105:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: testenforce
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      DYNAMIC_CONFIG_ENABLED: "false"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    # Sin healthcheck a proposito. La UI es Java y tarda ~30 s en arrancar; si
+    # `docker compose up -d --wait` tuviera que esperarla, cada ciclo de pruebas
+    # de humo y E2E pagaria ese tiempo por una herramienta que las pruebas no
+    # usan. Al no declarar sonda, --wait la da por lista en cuanto el contenedor
+    # corre y termina de arrancar en segundo plano.
+
   pricing-api:
     build:
       context: .
