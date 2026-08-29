@@ -1094,3 +1094,66 @@ ejecución y la probabilidad de intermitencia.
 Y la regla complementaria: **no dupliques**. El recargo por devolución tardía se
 prueba una vez, con `[Theory]`, en el dominio. En E2E solo se comprueba que el número
 que calculó el dominio aparece en pantalla.
+
+### Nivel 1 o nivel 2: la duda más frecuente
+
+La frontera entre dominio y aplicación es la que más cuesta, porque casi todo suena a
+«regla de negocio». La pregunta que de verdad discrimina es otra:
+
+> **¿El agregado tiene dentro todo el dato necesario para decidir?**
+>
+> - **Sí** → la regla vive en el dominio → **nivel 1**.
+> - **No, hay que ir a buscarlo fuera** → la decisión es orquestación → **nivel 2**.
+
+Dos reglas que suenan igual y caen en lados distintos:
+
+- «La licencia debe cubrir el periodo» → licencia y periodo están en el agregado →
+  **nivel 1**.
+- «El vehículo debe estar disponible» → esa información vive en Fleet → **nivel 2**.
+
+Un agregado solo puede razonar sobre lo que tiene. En cuanto hay que preguntarle a
+alguien, deja de ser una decisión del dominio.
+
+#### Tres comprobaciones rápidas
+
+| | Nivel 1 | Nivel 2 |
+|---|---|---|
+| ¿Necesitas un doble? | No | Sí |
+| ¿Qué instancias en el `arrange`? | `RentalBuilder.A()` | `new RentalService(...)` |
+| ¿Qué afirmas? | un **valor**: total, estado, excepción | un **suceso**: a quién se llamó, en qué orden, qué pasa si falla |
+
+El corolario de la primera fila importa más que la fila: si una prueba de dominio
+necesitara un mock, el problema no es la prueba, es que el dominio tiene una
+dependencia que no debería tener.
+
+#### El patrón: la regla abajo, la conexión arriba
+
+| Situación | Nivel 1 pregunta | Nivel 2 pregunta |
+|---|---|---|
+| Licencia vencida | ¿lanza `DriverLicenseExpiredException`? | ¿se convierte en `Result.Failure`? |
+| Precio | ¿50 × 3 = 150? | ¿se usa la tarifa de Pricing y no la del catálogo? |
+| El «ahora» | ¿rechaza un periodo ya iniciado? | ¿ese `now` sale del puerto `IClock`? |
+
+#### Un concepto puede repartirse entre niveles
+
+El solapamiento es el mejor ejemplo: aparece en tres, y ninguno repite a otro.
+
+```csharp
+Overlaps_is_false_for_back_to_back_periods              // nivel 1: QUÉ es solaparse
+Fails_when_another_rental_overlaps_the_period           // nivel 2: qué hace el caso de uso
+HasOverlappingRental_is_false_for_a_back_to_back_period // nivel 3: que el SQL lo implemente
+```
+
+El dominio define el concepto, la aplicación lo aplica sobre datos traídos de fuera,
+y el adaptador comprueba la búsqueda contra PostgreSQL.
+
+#### Señal de que te equivocaste de nivel
+
+En una prueba de aplicación, **un número en el assert que no proviene de ningún
+doble**. Si `250m` lo calculó el dominio, esa prueba iba abajo.
+
+La excepción legítima es la propagación: en
+`Cancel_publishes_the_refund_computed_by_the_domain` el `150m` se afirma también
+**dentro del evento publicado**, y lo que se comprueba es que el importe atraviesa
+DTO y evento sin perderse. Si al borrar esa segunda aserción la prueba sigue teniendo
+sentido, estabas duplicando.
