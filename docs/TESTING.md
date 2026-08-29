@@ -10,33 +10,41 @@ inyectado, opciones configurables), casi siempre la razón está en este documen
 ## 1. El mapa completo
 
 ```
-                                    ┌────────────────────┐
-                            HTTP    │   Pricing.Api      │  (sin estado)
-                        ┌──────────►│   :5102            │
-                        │           └────────────────────┘
-┌──────────┐   HTTP  ┌──┴───────────┐   HTTP   ┌────────────────────┐
-│ Frontend │────────►│ Rentals.Api  │─────────►│   Fleet.Api        │
-│  React   │         │   :5101      │          │   :5103            │
-│  :5173   │         └──────┬───────┘          └─────────┬──────────┘
-└──────────┘                │                            ▲
-                            │ publica                    │ consume
-                            ▼                            │
-                     ┌──────────────────────────────────┴─────┐
-                     │        Kafka · topic rental-events      │
-                     └──────────────────────────┬──────────────┘
-                                                │ consume
-                                                ▼
-                                     ┌────────────────────┐
-                                     │ Notifications.Api  │
-                                     │   :5104            │
-                                     └────────────────────┘
+                          HTTP    ┌────────────────────┐
+                       ┌─────────►│   Pricing.Api      │  (sin estado)
+                       │          │   :5102            │
+┌──────────┐        ┌──┴────────┐ └────────────────────┘
+│ Frontend │  HTTP  │ Rentals   │        HTTP   ┌────────────────────┐
+│  React   │───────►│ Api :5101 │──────────────►│   Fleet.Api :5103  │
+│  :5173   │        └─────┬─────┘               └─────────┬──────────┘
+└──────────┘              │ publica                       ▲ consume
+                          ▼                               │
+        ┌─────────────────────────────────────────────────┴──────┐
+        │              Kafka · topic rental-events                │
+        └──┬──────────────────┬───────────────────┬───────────────┘
+           │ consume          │ consume           │ consume
+           ▼                  ▼                   ▼
+  ┌─────────────────┐ ┌────────────────┐ ┌──────────────────┐
+  │ Notifications   │ │ Insurances.Api │ │  Billing.Api     │
+  │ Api :5104       │ │ :5106          │ │  :5107           │
+  └─────────────────┘ └────────────────┘ └──────────────────┘
 
-                     PostgreSQL :55432  (esquemas `rentals` y `fleet`)
+  PostgreSQL :55432  (esquemas rentals, fleet y billing)
+  Kafka UI   :5105   (diagnostico)
 ```
 
-`Rentals` es el servicio principal y el único con arquitectura hexagonal completa.
-Los otros tres son deliberadamente pequeños: existen para que haya algo real al otro
-lado de cada adaptador.
+**Dos servicios son hexagonales y cuatro son ligeros**, y ese contraste es
+deliberado:
+
+| Servicio | Arquitectura | Adaptador de entrada |
+|---|---|---|
+| `Rentals` | Hexagonal (4 proyectos) | Minimal API |
+| `Billing` | Hexagonal (4 proyectos) | **Controllers clásicos** |
+| `Pricing`, `Fleet`, `Notifications`, `Insurances` | Un solo proyecto | Minimal API |
+
+Rentals y Billing muestran la misma arquitectura con dos estilos de adaptador de
+entrada distintos. Los cuatro ligeros existen para que haya algo real al otro lado de
+cada adaptador, sin pagar la ceremonia de cuatro capas donde no aporta.
 
 ### Arquitectura hexagonal de Rentals
 
@@ -57,17 +65,22 @@ permite que el 60 % de las pruebas no necesiten Docker.
 
 | # | Proyecto | Nivel | Métodos | Casos | Qué demuestra | Infra | Tiempo |
 |---|---|---|---:|---:|---|---|---|
-| 1 | `Rentals.Domain.Tests` | Unitaria pura | 66 | 96 | Las reglas de negocio | — | 2 s |
-| 2 | `Rentals.Application.Tests` | Unitaria con dobles | 29 | 29 | La orquestación del caso de uso | — | 3 s |
-| 3 | `Pricing.Api.Tests` | Unitaria + API | 18 | 27 | El motor de tarifas y su contrato HTTP | — | 3 s |
-| 4 | `Notifications.Tests` | Unitaria + API | 18 | 18 | La traducción evento → notificación y su idempotencia (Moq) | — | 3 s |
-| 5 | `Rentals.Api.Tests` | API en memoria | 18 | 27 | El contrato HTTP y el mapeo de errores | — | 4 s |
-| 6 | `Rentals.Infrastructure.Tests` | Adaptadores | 33 | 37 | SQL, mapeo EF, Kafka, HTTP, reintentos | Docker | 44 s |
-| 7 | `Fleet.Api.Tests` | Servicio completo | 14 | 14 | API + PostgreSQL + regla de disponibilidad | Docker | 25 s |
-| 8 | `Rentals.Integration.Tests` | Integración entre servicios | 12 | 12 | Que los tres servicios se entienden | Docker | 41 s |
-| 9 | `Smoke.Tests` | Humo | 8 | 13 | Que el despliegue está vivo y cableado | compose | 2 s |
-| 10 | `e2e/` (Playwright) | E2E | 12 | 12 | Recorridos de usuario reales | compose | 14 s |
-| | **Total** | | **228** | **285** | | | |
+| 1 | `Rentals.Domain.Tests` | Unitaria pura | 68 | 101 | Las reglas de negocio de la renta | — | 2 s |
+| 2 | `Billing.Domain.Tests` | Unitaria pura | 26 | 30 | Las reglas de la factura | — | 2 s |
+| 3 | `Rentals.Application.Tests` | Unitaria con dobles | 31 | 31 | La orquestación del caso de uso (NSubstitute) | — | 3 s |
+| 4 | `Billing.Application.Tests` | Unitaria con dobles | 11 | 11 | Idempotencia y traducción de errores | — | 2 s |
+| 5 | `Pricing.Api.Tests` | Unitaria + API | 18 | 27 | El motor de tarifas y su contrato HTTP | — | 3 s |
+| 6 | `Insurances.Api.Tests` | Unitaria + API | 35 | 40 | Primas y ciclo de vida de las pólizas | — | 3 s |
+| 7 | `Notifications.Tests` | Unitaria + API | 18 | 18 | Evento → notificación, con Moq | — | 3 s |
+| 8 | `Rentals.Api.Tests` | API en memoria | 20 | 29 | Contrato HTTP en Minimal API | — | 4 s |
+| 9 | `Billing.Api.Tests` | API en memoria | 12 | 16 | Contrato HTTP en controllers clásicos | — | 4 s |
+| 10 | `Rentals.Infrastructure.Tests` | Adaptadores | 34 | 38 | SQL, mapeo EF, Kafka, HTTP, reintentos | Docker | 40 s |
+| 11 | `Billing.Infrastructure.Tests` | Adaptadores | 7 | 7 | `OwnsMany`, índice único, totales calculados | Docker | 20 s |
+| 12 | `Fleet.Api.Tests` | Servicio completo | 14 | 14 | API + PostgreSQL + disponibilidad | Docker | 25 s |
+| 13 | `Rentals.Integration.Tests` | Integración entre servicios | 12 | 12 | Que los servicios se entienden | Docker | 41 s |
+| 14 | `Smoke.Tests` | Humo | 10 | 19 | Que el despliegue está vivo y cableado | compose | 2 s |
+| 15 | `e2e/` (Playwright) | E2E | 18 | 18 | Recorridos de usuario reales | compose | 55 s |
+| | **Total** | | **334** | **411** | | | |
 
 «Métodos» son los `[Fact]` / `[Theory]` escritos; «casos» son las ejecuciones reales,
 porque cada `[InlineData]` de un `[Theory]` cuenta como una prueba independiente en el
@@ -105,47 +118,49 @@ Conviene aclarar un malentendido habitual: **ninguna prueba corre *dentro* de un
 contenedor**. Todas se ejecutan en la máquina de desarrollo (`dotnet test`,
 `npm test`). Lo que cambia es su relación con la infraestructura, y hay tres grupos.
 
-**Grupo 1 — no necesitan nada (197 de 285 casos, el 69 %)**
+**Grupo 1 — no necesitan nada (273 de 411 casos, el 66 %)**
 
 | Proyecto | Casos |
-|---|---|
-| `Rentals.Domain.Tests` | 96 |
-| `Rentals.Application.Tests` | 29 |
-| `Rentals.Api.Tests` | 27 |
+|---|---:|
+| `Rentals.Domain.Tests` | 101 |
+| `Insurances.Api.Tests` | 40 |
+| `Rentals.Application.Tests` | 31 |
+| `Billing.Domain.Tests` | 30 |
+| `Rentals.Api.Tests` | 29 |
 | `Pricing.Api.Tests` | 27 |
 | `Notifications.Tests` | 18 |
+| `Billing.Api.Tests` | 16 |
+| `Billing.Application.Tests` | 11 |
 
-Con Docker apagado corren igual, en unos 3 segundos en total. No es casualidad: es el
-retorno directo de la arquitectura hexagonal. El dominio no tiene dependencias y la
-aplicación solo conoce interfaces, así que dos tercios de la suite no tocan
-infraestructura.
+Con Docker apagado corren igual, en unos 6 segundos en total. No es casualidad: es el
+retorno directo de la arquitectura hexagonal. Los dominios no tienen dependencias y
+las capas de aplicación solo conocen interfaces, así que dos tercios de la suite no
+tocan infraestructura.
 
-**Grupo 2 — levantan sus propios contenedores (63 casos)**
+**Grupo 2 — levantan sus propios contenedores (71 casos)**
 
 Mediante Testcontainers, efímeros y creados por la propia prueba. Necesitan **Docker
 corriendo, pero no `docker compose`**.
 
 | Proyecto | Contenedores | Casos |
-|---|---|---|
-| `Rentals.Infrastructure.Tests` | PostgreSQL + Kafka | 37 |
+|---|---|---:|
+| `Rentals.Infrastructure.Tests` | PostgreSQL + Kafka | 38 |
 | `Fleet.Api.Tests` | PostgreSQL | 14 |
 | `Rentals.Integration.Tests` | PostgreSQL + Kafka | 12 |
+| `Billing.Infrastructure.Tests` | PostgreSQL | 7 |
 
-Son cinco contenedores si se lanza todo a la vez (los proyectos corren en paralelo),
-más un auxiliar `testcontainers/ryuk` que los limpia al terminar aunque el proceso
-muera. Se comparten por colección con `ICollectionFixture<>`, así que arrancan una vez
-por proyecto y no una vez por prueba.
+Se comparten por colección con `ICollectionFixture<>`, así que arrancan una vez por
+proyecto y no una vez por prueba. Un auxiliar `testcontainers/ryuk` los limpia al
+terminar aunque el proceso muera.
 
-**Grupo 3 — necesitan la pila ya desplegada (25 casos)**
+**Grupo 3 — necesitan la pila ya desplegada (37 casos)**
 
 | Proyecto | Requisito |
 |---|---|
-| `Smoke.Tests` (13) | `docker compose up -d --wait` |
-| `e2e/` (12) | compose + Chromium |
+| `Smoke.Tests` (19) | `docker compose up -d --wait` |
+| `e2e/` (18) | compose + Chromium |
 
-Estos no crean nada: verifican un despliegue que ya existe, con sus ocho
-contenedores (siete servicios más Kafka UI, que es solo una herramienta de
-diagnóstico).
+Estos no crean nada: verifican un despliegue que ya existe, con sus diez contenedores.
 
 #### Dos cosas que parecen contenedores y no lo son
 
@@ -1166,15 +1181,50 @@ La suite fallaba con `rental.license_expired`, un error real del dominio pero aj
 lo que la prueba quería demostrar. Los datos generados deben mantenerse dentro del
 rango válido de **todas** las reglas, no solo de la que se está probando.
 
+
+**14. Una imagen de contenedor obsoleta degradó el sistema en silencio.**
+Tras ampliar `rental.cancelled` con un campo nuevo, se reconstruyeron las imágenes de
+los servicios *nuevos* pero no la de `rentals-api`. El productor siguió publicando el
+evento **sin** ese campo; Billing lo deserializaba con el valor por defecto (cero),
+calculaba una penalización negativa y decidía «no hay nada que facturar». Nada falló:
+simplemente dejaron de emitirse facturas.
+
+Las pruebas no lo detectaron porque todas usan el código compilado del momento; el
+desajuste solo existe en el despliegue. La lección práctica es que **al cambiar
+`Shared.Contracts` hay que reconstruir todos los servicios**, productores incluidos, no
+solo los que se acaban de tocar.
+
+**15. Un enum que viajaba como número.**
+`PolicyStatus` salía en el JSON como `0`, `1`, `2` en lugar de `Draft`, `Active`… El
+frontal habría mostrado un número al usuario. Se corrigió con
+`JsonStringEnumConverter`, y la corrección destapó la otra mitad del problema: **el
+convertidor también hace falta al leer**. Una prueba que deserializaba `List<Policy>`
+empezó a fallar hasta configurarlo también en el cliente, que es exactamente lo que
+tendrá que hacer cualquier consumidor de esa API.
+
+**16. Facturar una cancelación que nunca llegó a cobrarse.**
+Al escribir la prueba E2E de la factura apareció un fallo de diseño: Billing calculaba
+la penalización como `total − reembolso`. Cancelar una renta **antes de confirmarla**
+devuelve cero —porque nunca hubo cargo—, así que esa resta daba el total entero y se
+facturaba la renta completa a alguien que no había reservado nada en firme.
+
+El evento no permitía distinguir «cancelada sin cargo» de «cancelada con 0 % de
+reembolso». La corrección fue mover la decisión al sitio que sí tiene la información:
+el agregado calcula ahora un `PenaltyAmount` explícito y Billing se limita a
+facturarlo. Está cubierto por una `[Theory]` de dominio que comprueba, en cada tramo
+de la política, que **lo reembolsado más lo cobrado suma siempre el total**.
+
 ---
 
 ## 13. Dónde poner una prueba nueva
 
 | Si quieres comprobar… | Va en… |
 |---|---|
-| Una regla de negocio, un cálculo, una transición | `Rentals.Domain.Tests` |
-| Que el caso de uso llama a los puertos correctos | `Rentals.Application.Tests` |
-| Un código de estado HTTP o la forma del JSON | `Rentals.Api.Tests` |
+| Una regla de negocio de la renta | `Rentals.Domain.Tests` |
+| Una regla de la factura | `Billing.Domain.Tests` |
+| Que el caso de uso llama a los puertos correctos | `Rentals.Application.Tests` / `Billing.Application.Tests` |
+| Un código de estado HTTP o la forma del JSON | `Rentals.Api.Tests` (Minimal API) / `Billing.Api.Tests` (controllers) |
+| El cálculo de una prima o el ciclo de vida de una póliza | `Insurances.Api.Tests` |
 | Una consulta SQL, un mapeo EF, un mensaje de Kafka | `Rentals.Infrastructure.Tests` |
 | Que dos servicios se entienden de verdad | `Rentals.Integration.Tests` |
 | Que el despliegue está vivo | `Smoke.Tests` |

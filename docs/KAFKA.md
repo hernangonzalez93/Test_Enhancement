@@ -39,20 +39,24 @@ offset:  0    1    2   ...  47   48   49
 | **Partición** | 1 | Unidad de orden y de paralelismo |
 | **Clave** | `rentalId` | Decide la partición → garantiza orden por renta |
 | **Offset** | 0 → 49 | Posición en el log. Solo crece |
-| **Grupo de consumo** | `fleet-service`, `notifications-service` | Cada uno con **su propio** marcador |
+| **Grupo de consumo** | `fleet-service`, `notifications-service`, `insurances-service`, `billing-service` | Cada uno con **su propio** marcador |
 
 ### El grupo de consumo es la pieza clave
 
-Cada grupo lleva su offset por separado, así que Fleet y Notifications reciben **cada
-uno** una copia de todos los eventos. Eso es el *fan-out*.
+Cada grupo lleva su offset por separado, así que los **cuatro** consumidores reciben
+cada uno una copia de todos los eventos. Eso es el *fan-out*, y es lo que permite
+añadir un servicio nuevo —Insurances y Billing se sumaron después— sin tocar una sola
+línea de Rentals.
 
 Si ambos compartieran `GroupId`, se **repartirían** los mensajes y cada evento lo
 vería solo uno de los dos. Una línea de configuración separa un comportamiento del
 otro:
 
 ```csharp
-GroupId = "fleet-service"           // Fleet.Api
-GroupId = "notifications-service"   // Notifications.Api
+GroupId = "fleet-service"           // Fleet.Api          -> disponibilidad del vehiculo
+GroupId = "notifications-service"   // Notifications.Api  -> avisos al cliente
+GroupId = "insurances-service"      // Insurances.Api     -> polizas
+GroupId = "billing-service"         // Billing.Api        -> facturas
 ```
 
 ### La clave no es un identificador cualquiera
@@ -345,6 +349,17 @@ Tres partes:
 - **Cabeceras**: `event-type` y `event-id`. La primera es la que permite a los
   consumidores **enrutar sin deserializar** el cuerpo. Si algún día ves un mensaje sin
   ella, ese es el bug.
+
+Los cinco tipos originales (`rental.requested`, `confirmed`, `started`, `completed`,
+`cancelled`) se ampliaron con **`rental.extended`** al añadir la prórroga: Insurances
+lo necesita para alargar la vigencia de la póliza. Dejarlo como evento interno habría
+dejado pólizas que caducan antes que la renta que aseguran.
+
+`rental.cancelled` lleva además un **`penaltyAmount`** calculado por el dominio. Antes
+Billing lo derivaba como `total − reembolso`, y eso facturaba la renta entera cuando se
+cancelaba **antes de confirmar** —donde el reembolso es cero porque nunca hubo cargo—.
+Quien tiene la información para decidirlo es el agregado, así que la decide él (ver el
+punto 16 de la sección 12 de [`TESTING.md`](TESTING.md)).
 - **Clave**: el `rentalId`.
 - **Valor**: el JSON en camelCase.
 

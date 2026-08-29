@@ -28,8 +28,10 @@
     <Project Path="src/Shared/Shared.Contracts/Shared.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Billing.Api.Tests/Billing.Api.Tests.csproj" />
     <Project Path="tests/Billing.Application.Tests/Billing.Application.Tests.csproj" />
     <Project Path="tests/Billing.Domain.Tests/Billing.Domain.Tests.csproj" />
+    <Project Path="tests/Billing.Infrastructure.Tests/Billing.Infrastructure.Tests.csproj" />
     <Project Path="tests/Fleet.Api.Tests/Fleet.Api.Tests.csproj" />
     <Project Path="tests/Insurances.Api.Tests/Insurances.Api.Tests.csproj" />
     <Project Path="tests/Notifications.Tests/Notifications.Tests.csproj" />

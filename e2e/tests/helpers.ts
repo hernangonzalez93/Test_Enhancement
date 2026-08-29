@@ -83,3 +83,40 @@ export async function createRental(
   await expect(page.getByTestId('rental-status')).toBeVisible()
   return (await page.getByTestId('rental-id').innerText()).trim()
 }
+
+/** Identificador de cliente que el navegador guarda en localStorage. */
+export async function currentCustomerId(page: Page): Promise<string> {
+  await page.goto('/')
+  return (await page.getByTestId('customer-id').innerText()).trim()
+}
+
+/**
+ * Crea una renta llamando directamente a la API.
+ *
+ * El formulario solo tiene granularidad de dia, y hay escenarios que necesitan
+ * una hora exacta: por ejemplo cancelar con menos de 24 h de antelacion para que
+ * quede penalizacion y por tanto factura. Aqui se fija el instante al segundo.
+ */
+export async function createRentalViaApi(
+  request: APIRequestContext,
+  options: { customerId: string; vehicleId: string; startInHours: number; days: number }
+): Promise<string> {
+  const start = new Date(Date.now() + options.startInHours * 3600_000)
+  const end = new Date(start.getTime() + options.days * 24 * 3600_000)
+  const licenseExpiry = new Date(Date.now() + 3 * 365 * 24 * 3600_000)
+
+  const response = await request.post('/api/rentals', {
+    data: {
+      customerId: options.customerId,
+      vehicleId: options.vehicleId,
+      periodStart: start.toISOString(),
+      periodEnd: end.toISOString(),
+      licenseNumber: 'LIC-12345',
+      licenseExpiresOn: licenseExpiry.toISOString(),
+      extras: []
+    }
+  })
+
+  expect(response.status()).toBe(201)
+  return (await response.json()).id
+}

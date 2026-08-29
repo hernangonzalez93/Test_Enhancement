@@ -199,7 +199,7 @@ public sealed class RentalEventsConsumer(
             e.RentalId, e.CustomerId, e.FinalTotal, e.LateDays, e.Currency, cancellationToken),
 
         RentalCancelledIntegrationEvent e => invoices.IssueForCancelledRentalAsync(
-            e.RentalId, e.CustomerId, e.EstimatedTotal, e.RefundAmount, e.Currency, cancellationToken),
+            e.RentalId, e.CustomerId, e.PenaltyAmount, e.Currency, cancellationToken),
 
         _ => Task.CompletedTask
     };

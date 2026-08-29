@@ -5,6 +5,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 
+// PolicyStatus es un enum: sin este convertidor viajaria como numero (0, 1, 2)
+// y tanto el frontal como las pruebas verian "0" en lugar de "Draft".
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
 builder.Services.Configure<KafkaConsumerOptions>(builder.Configuration.GetSection(KafkaConsumerOptions.SectionName));
 builder.Services.AddSingleton<IPolicyStore, InMemoryPolicyStore>();
 builder.Services.AddSingleton<IPolicyIssuer, PolicyIssuer>();

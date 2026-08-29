@@ -40,6 +40,7 @@ public static class IntegrationEventMapper
             e.VehicleId.Value,
             e.EstimatedTotal.Amount,
             e.RefundAmount.Amount,
+            e.PenaltyAmount.Amount,
             e.RefundPercentage,
             e.RefundAmount.Currency,
             e.OccurredAt),

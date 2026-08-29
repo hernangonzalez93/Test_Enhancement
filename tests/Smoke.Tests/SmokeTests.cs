@@ -27,7 +27,19 @@ public sealed class SmokeTests : IDisposable
     private static readonly string PricingUrl = Url("SMOKE_PRICING_URL", "http://localhost:5102");
     private static readonly string FleetUrl = Url("SMOKE_FLEET_URL", "http://localhost:5103");
     private static readonly string NotificationsUrl = Url("SMOKE_NOTIFICATIONS_URL", "http://localhost:5104");
+    private static readonly string InsurancesUrl = Url("SMOKE_INSURANCES_URL", "http://localhost:5106");
+    private static readonly string BillingUrl = Url("SMOKE_BILLING_URL", "http://localhost:5107");
     private static readonly string FrontendUrl = Url("SMOKE_FRONTEND_URL", "http://localhost:5173");
+
+    private static string BaseUrlFor(string service) => service switch
+    {
+        "rentals" => RentalsUrl,
+        "pricing" => PricingUrl,
+        "fleet" => FleetUrl,
+        "insurances" => InsurancesUrl,
+        "billing" => BillingUrl,
+        _ => NotificationsUrl
+    };
 
     private readonly HttpClient _client = new() { Timeout = TimeSpan.FromSeconds(15) };
 
@@ -38,17 +50,11 @@ public sealed class SmokeTests : IDisposable
     [InlineData("pricing")]
     [InlineData("fleet")]
     [InlineData("notifications")]
+    [InlineData("insurances")]
+    [InlineData("billing")]
     public async Task Every_service_answers_its_liveness_probe(string service)
     {
-        var baseUrl = service switch
-        {
-            "rentals" => RentalsUrl,
-            "pricing" => PricingUrl,
-            "fleet" => FleetUrl,
-            _ => NotificationsUrl
-        };
-
-        var response = await _client.GetAsync($"{baseUrl}/health");
+        var response = await _client.GetAsync($"{BaseUrlFor(service)}/health");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
@@ -57,14 +63,11 @@ public sealed class SmokeTests : IDisposable
     [InlineData("rentals")]
     [InlineData("fleet")]
     [InlineData("notifications")]
+    [InlineData("insurances")]
+    [InlineData("billing")]
     public async Task Every_service_answers_its_readiness_probe(string service)
     {
-        var baseUrl = service switch
-        {
-            "rentals" => RentalsUrl,
-            "fleet" => FleetUrl,
-            _ => NotificationsUrl
-        };
+        var baseUrl = BaseUrlFor(service);
 
         // /health/ready es mas exigente que /health: solo responde 200 si el
         // servicio puede TRABAJAR. En Rentals y Fleet incluye que PostgreSQL
@@ -120,6 +123,33 @@ public sealed class SmokeTests : IDisposable
         (await _client.GetAsync($"{FrontendUrl}/api/notifications")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await _client.GetAsync($"{FrontendUrl}/api/rentals?customerId={Guid.NewGuid()}"))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await _client.GetAsync($"{FrontendUrl}/api/policies?rentalId={Guid.NewGuid()}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await _client.GetAsync($"{FrontendUrl}/api/invoices?rentalId={Guid.NewGuid()}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await _client.GetAsync($"{FrontendUrl}/api/insurance/coverages"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Insurances_answers_a_real_premium_quote()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"{InsurancesUrl}/api/insurance/quotes",
+            new { coverage = "standard", days = 3, rentalTotal = 150m, currency = "USD" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var quote = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // minimo 9/dia x 3 = 27, frente al 12 % de 150 = 18.
+        quote.GetProperty("premium").GetDecimal().ShouldBe(27m);
+    }
+
+    [Fact]
+    public async Task The_billing_database_has_its_migrations_applied()
+    {
+        var response = await _client.GetAsync($"{BillingUrl}/api/invoices?customerId={Guid.NewGuid()}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -160,6 +190,18 @@ public sealed class SmokeTests : IDisposable
         });
 
         notified.ShouldBeTrue("la confirmacion debia llegar a Notifications a traves de Kafka.");
+
+        // Insurances consume los mismos eventos y activa la poliza de la renta.
+        var insured = await EventuallyAsync(async () =>
+        {
+            var policies = await _client.GetFromJsonAsync<JsonElement>(
+                $"{InsurancesUrl}/api/policies?rentalId={rentalId}");
+
+            return policies.GetArrayLength() > 0
+                   && policies[0].GetProperty("status").GetString() == "Active";
+        });
+
+        insured.ShouldBeTrue("Insurances debia emitir y activar la poliza de la renta.");
     }
 
     private static async Task<bool> EventuallyAsync(Func<Task<bool>> condition, int timeoutSeconds = 30)

@@ -29,6 +29,8 @@ public sealed record RentalCancelled(
     VehicleId VehicleId,
     Money EstimatedTotal,
     Money RefundAmount,
+    /// <summary>Importe que queda por cobrar al cliente tras la cancelacion.</summary>
+    Money PenaltyAmount,
     decimal RefundPercentage,
     DateTimeOffset OccurredAt) : IDomainEvent;
 

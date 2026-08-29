@@ -3,7 +3,7 @@
 Sistema de **renta de vehículos** en .NET 10 con arquitectura hexagonal, comunicación
 por eventos sobre Kafka, PostgreSQL, frontend en React y todo en contenedores.
 
-El objetivo del repositorio no es el dominio: es el **stack de pruebas**. Hay 285
+El objetivo del repositorio no es el dominio: es el **stack de pruebas**. Hay 411
 pruebas repartidas en seis niveles, desde reglas de negocio puras hasta recorridos de
 usuario en un navegador real.
 
@@ -31,6 +31,8 @@ docker compose up -d --wait
 | Fleet API | http://localhost:5103 |
 | Notifications API | http://localhost:5104 |
 | Kafka UI | http://localhost:5105 |
+| Insurances API | http://localhost:5106 |
+| Billing API | http://localhost:5107 |
 | PostgreSQL | `localhost:55432` · usuario/clave `testenforce` |
 | Kafka | `localhost:59092` |
 
@@ -83,9 +85,15 @@ src/
     Rentals.Application/          Puertos + RentalService (orquestación)
     Rentals.Infrastructure/       Adaptadores: EF Core, Kafka, HTTP
     Rentals.Api/                  Minimal API
+  Billing/
+    Billing.Domain/               Agregado Invoice. Cero dependencias.
+    Billing.Application/          Puertos + InvoiceService
+    Billing.Infrastructure/       EF Core (OwnsMany para las líneas)
+    Billing.Api/                  Controllers clásicos + consumidor Kafka
   Pricing/Pricing.Api/            Cálculo de tarifas (HTTP, sin estado)
   Fleet/Fleet.Api/                Inventario de vehículos (HTTP + consumidor Kafka)
   Notifications/Notifications.Api/ Consumidor Kafka + API de consulta
+  Insurances/Insurances.Api/      Primas y pólizas (HTTP + consumidor Kafka)
 
 tests/
   TestSupport/                    Reloj fijo, builders y datos compartidos
@@ -94,7 +102,12 @@ tests/
   Rentals.Api.Tests/              WebApplicationFactory
   Rentals.Infrastructure.Tests/   Testcontainers (PostgreSQL, Kafka) + WireMock
   Rentals.Integration.Tests/      Los tres servicios juntos, infraestructura real
+  Billing.Domain.Tests/           Reglas de la factura
+  Billing.Application.Tests/      Orquestación con NSubstitute
+  Billing.Api.Tests/              Controllers clásicos
+  Billing.Infrastructure.Tests/   EF Core contra PostgreSQL real
   Pricing.Api.Tests/              Motor de tarifas + contrato HTTP
+  Insurances.Api.Tests/           Primas y ciclo de vida de pólizas
   Fleet.Api.Tests/                API + PostgreSQL real
   Notifications.Tests/            Unitarias con Moq
   Smoke.Tests/                    Contra el despliegue de docker compose
@@ -113,9 +126,14 @@ docs/KAFKA.md                     Cómo funciona y cómo observar la mensajería
 constructor y expone métodos. La indirección de un mediador no aportaría nada aquí y
 haría las pruebas menos directas.
 
-**Eventos, no llamadas.** Rentals publica en el topic `rental-events`. Fleet consume
-para bloquear o liberar vehículos; Notifications consume para generar avisos. Ninguno
-de los dos conoce a Rentals: solo el contrato de `Shared.Contracts`.
+**Eventos, no llamadas.** Rentals publica en el topic `rental-events`. Fleet bloquea o
+libera vehículos, Notifications genera avisos, Insurances emite y gestiona pólizas, y
+Billing factura al completar o al cancelar. Ninguno conoce a Rentals: solo el contrato
+de `Shared.Contracts`.
+
+**Dos estilos de adaptador de entrada sobre la misma arquitectura.** Rentals y Billing
+son ambos hexagonales, pero Rentals usa Minimal API y Billing usa **controllers
+clásicos**. Sirve para comparar los dos estilos con el resto de condiciones iguales.
 
 **Dos consultas síncronas.** Rentals llama a Fleet (¿existe y está disponible este
 vehículo?) y a Pricing (¿cuánto cuesta?) por HTTP, porque necesita la respuesta para
@@ -144,8 +162,18 @@ devuelve `Result.Failure("rental.overlapping", …)`, que la API traduce a 409 e
 - Reembolso al cancelar: 100 % con más de 48 h, 50 % entre 24 y 48 h, 25 % entre 2 y
   24 h, 0 % después. Cancelar antes de confirmar no reembolsa nada porque no se cobró.
 - Devolución tardía: cada bloque de 24 h iniciado se cobra a tarifa plena.
-- Estados: `Pending → Confirmed → Active → Completed`, con salida a `Cancelled`
-  únicamente desde `Pending` y `Confirmed`.
+- Estados de la renta: `Pending → Confirmed → Active → Completed`, con salida a
+  `Cancelled` únicamente desde `Pending` y `Confirmed`.
+- Cancelar **antes de confirmar** no reembolsa ni cobra nada: nunca hubo cargo. Tras
+  confirmar, lo que no se reembolsa se cobra, y reembolso más penalización suman
+  siempre el total.
+- Prima del seguro: el mayor entre un mínimo diario y un porcentaje del importe de la
+  renta, según la cobertura (basic, standard, premium).
+- Póliza: `Draft → Active → Expired`, con salida a `Cancelled` desde Draft y Active.
+  Prorrogar la renta alarga la vigencia y recalcula la prima.
+- Factura: se emite al completar (total final) o al cancelar (solo la penalización).
+  IVA del 19 %. Estados `Draft → Issued → Paid`, con `Void` desde Draft e Issued; una
+  factura pagada es inmutable. El pago debe cuadrar exactamente con el total.
 
 ---
 

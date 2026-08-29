@@ -137,15 +137,18 @@ public sealed class Rental : AggregateRoot<RentalId>
 
         var utcNow = now.ToUniversalTime();
         var percentage = CancellationPolicy.RefundPercentageFor(Period.Start, utcNow);
-        var refund = Status == RentalStatus.Pending
-            ? Money.Zero(EstimatedTotal.Currency)
-            : EstimatedTotal.Percentage(percentage);
+
+        // Cancelar antes de confirmar no cobra ni devuelve nada: no llego a
+        // haber cargo. Despues de confirmar, lo que no se reembolsa se cobra.
+        var neverCharged = Status == RentalStatus.Pending;
+        var refund = neverCharged ? Money.Zero(EstimatedTotal.Currency) : EstimatedTotal.Percentage(percentage);
+        var penalty = neverCharged ? Money.Zero(EstimatedTotal.Currency) : EstimatedTotal.Subtract(refund);
 
         Status = RentalStatus.Cancelled;
         CancelledAt = utcNow;
         RefundAmount = refund;
 
-        Raise(new RentalCancelled(Id, CustomerId, VehicleId, EstimatedTotal, refund, percentage, utcNow));
+        Raise(new RentalCancelled(Id, CustomerId, VehicleId, EstimatedTotal, refund, penalty, percentage, utcNow));
     }
 
     /// <summary>Retiro del vehiculo. No se puede retirar antes de la hora pactada.</summary>

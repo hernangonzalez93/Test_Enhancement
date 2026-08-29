@@ -76,8 +76,8 @@ public sealed class InvoiceServiceTests
     [Fact]
     public async Task A_cancellation_bills_only_the_non_refunded_penalty()
     {
-        // Total 300, reembolso 150 -> penalizacion 150, mas 19 % de impuesto.
-        var result = await CreateSut().IssueForCancelledRentalAsync(RentalId, CustomerId, 300m, 150m, "USD");
+        // El dominio de Rentals ya calculo la penalizacion: 150, mas 19 % de impuesto.
+        var result = await CreateSut().IssueForCancelledRentalAsync(RentalId, CustomerId, 150m, "USD");
 
         var invoice = result.Value.ShouldNotBeNull();
         invoice.Subtotal.ShouldBe(150m);
@@ -86,9 +86,9 @@ public sealed class InvoiceServiceTests
     }
 
     [Fact]
-    public async Task A_fully_refunded_cancellation_produces_no_invoice()
+    public async Task A_cancellation_with_no_chargeable_amount_produces_no_invoice()
     {
-        var result = await CreateSut().IssueForCancelledRentalAsync(RentalId, CustomerId, 300m, 300m, "USD");
+        var result = await CreateSut().IssueForCancelledRentalAsync(RentalId, CustomerId, 0m, "USD");
 
         result.Error.Code.ShouldBe("invoice.nothing_to_bill");
         await _repository.DidNotReceive().AddAsync(Arg.Any<Invoice>(), Arg.Any<CancellationToken>());

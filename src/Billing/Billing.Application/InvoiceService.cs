@@ -109,7 +109,7 @@ public interface IInvoiceService
         CancellationToken cancellationToken = default);
 
     Task<Result<InvoiceDto>> IssueForCancelledRentalAsync(
-        Guid rentalId, Guid customerId, decimal estimatedTotal, decimal refundAmount, string currency,
+        Guid rentalId, Guid customerId, decimal penaltyAmount, string currency,
         CancellationToken cancellationToken = default);
 
     Task<Result<InvoiceDto>> PayAsync(Guid invoiceId, CancellationToken cancellationToken = default);
@@ -173,8 +173,7 @@ public sealed class InvoiceService(
     public async Task<Result<InvoiceDto>> IssueForCancelledRentalAsync(
         Guid rentalId,
         Guid customerId,
-        decimal estimatedTotal,
-        decimal refundAmount,
+        decimal penaltyAmount,
         string currency,
         CancellationToken cancellationToken = default)
     {
@@ -184,17 +183,18 @@ public sealed class InvoiceService(
             return Result<InvoiceDto>.Success(InvoiceDto.From(existing));
         }
 
-        var penalty = estimatedTotal - refundAmount;
-        if (penalty <= 0m)
+        // La penalizacion la decide el dominio de Rentals: cero si hubo
+        // reembolso total, o si la renta se cancelo antes de confirmarse y por
+        // tanto nunca llego a haber cargo.
+        if (penaltyAmount <= 0m)
         {
-            // Reembolso total: no hay nada que cobrar y por tanto no hay factura.
             return Result<InvoiceDto>.Failure(InvoiceErrors.NothingToBill);
         }
 
         try
         {
             var invoice = Invoice.DraftFor(rentalId, customerId, currency, clock.UtcNow);
-            invoice.AddLine("cancellation-penalty", Money.Of(penalty, currency));
+            invoice.AddLine("cancellation-penalty", Money.Of(penaltyAmount, currency));
             invoice.Issue(clock.UtcNow);
 
             return await PersistAsync(invoice, cancellationToken);

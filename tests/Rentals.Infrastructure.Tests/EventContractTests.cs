@@ -54,7 +54,7 @@ public sealed class EventContractTests
         // con solo el porcentaje no se puede derivar cuando el reembolso es cero.
         var now = DateTimeOffset.UtcNow;
         var original = new RentalCancelledIntegrationEvent(
-            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), 300m, 150m, 50m, "USD", now);
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), 300m, 150m, 150m, 50m, "USD", now);
 
         var json = EventSerialization.Serialize(original);
         using var document = JsonDocument.Parse(json);
@@ -99,7 +99,7 @@ public sealed class EventContractTests
         [
             new RentalRequestedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), now, now, 1m, "USD", now),
             new RentalConfirmedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, "USD", now),
-            new RentalCancelledIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, 1m, 100m, "USD", now),
+            new RentalCancelledIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, 1m, 0m, 100m, "USD", now),
             new RentalStartedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), now, now),
             new RentalCompletedIntegrationEvent(rentalId, Guid.CreateVersion7(), Guid.CreateVersion7(), 1m, 0, "USD", now)
         ];

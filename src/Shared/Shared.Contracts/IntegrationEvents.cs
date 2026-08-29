@@ -79,6 +79,8 @@ public sealed record RentalCancelledIntegrationEvent(
     Guid VehicleId,
     decimal EstimatedTotal,
     decimal RefundAmount,
+    /// <summary>Importe que queda por cobrar. Cero si la renta nunca se confirmo.</summary>
+    decimal PenaltyAmount,
     decimal RefundPercentage,
     string Currency,
     DateTimeOffset OccurredAt) : IIntegrationEvent

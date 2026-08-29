@@ -133,6 +133,43 @@ public sealed class RentalTests
     }
 
     [Fact]
+    public void Cancel_from_pending_owes_nothing_because_nothing_was_charged()
+    {
+        // Distincion importante para facturacion: cancelar antes de confirmar
+        // no genera cargo. Sin ella, Billing facturaria la renta entera.
+        var rental = RentalBuilder.A().WithDailyRate(50m).ForDays(3).Build();
+
+        rental.Cancel(Now);
+
+        var @event = rental.DomainEvents.OfType<RentalCancelled>().Single();
+        @event.RefundAmount.IsZero.ShouldBeTrue();
+        @event.PenaltyAmount.IsZero.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(240, 150, 0)]     // mas de 48 h: reembolso total, nada que cobrar
+    [InlineData(30, 75, 75)]      // entre 24 y 48 h: mitad y mitad
+    [InlineData(3, 37.5, 112.5)]  // menos de 24 h: se cobra el 75 %
+    [InlineData(0, 0, 150)]       // ya iniciada: se cobra todo
+    public void Cancel_from_confirmed_charges_what_is_not_refunded(
+        int hoursAhead,
+        decimal expectedRefund,
+        decimal expectedPenalty)
+    {
+        var start = Now.AddDays(10);
+        var rental = RentalBuilder.A().From(start).ForDays(3).WithDailyRate(50m).BuildConfirmed();
+        rental.ClearDomainEvents();
+
+        rental.Cancel(start.AddHours(-hoursAhead));
+
+        var @event = rental.DomainEvents.OfType<RentalCancelled>().Single();
+        @event.RefundAmount.Amount.ShouldBe(expectedRefund);
+        @event.PenaltyAmount.Amount.ShouldBe(expectedPenalty);
+        // Lo devuelto mas lo cobrado siempre suma el total estimado.
+        (@event.RefundAmount.Amount + @event.PenaltyAmount.Amount).ShouldBe(150m);
+    }
+
+    [Fact]
     public void Cancel_is_rejected_once_the_vehicle_was_picked_up()
     {
         var rental = RentalBuilder.A().BuildActive();

@@ -95,7 +95,7 @@ public sealed class PolicyIssuerTests
         await sut.HandleAsync(Confirmed());
 
         var handled = await sut.HandleAsync(
-            new RentalCancelledIntegrationEvent(RentalId, CustomerId, VehicleId, 150m, 150m, 100m, "USD", Now));
+            new RentalCancelledIntegrationEvent(RentalId, CustomerId, VehicleId, 150m, 150m, 0m, 100m, "USD", Now));
 
         handled.ShouldBeTrue();
         (await CurrentPolicyAsync()).Status.ShouldBe(PolicyStatus.Cancelled);
@@ -121,7 +121,7 @@ public sealed class PolicyIssuerTests
         var sut = CreateSut();
         await sut.HandleAsync(Requested());
         await sut.HandleAsync(
-            new RentalCancelledIntegrationEvent(RentalId, CustomerId, VehicleId, 150m, 0m, 0m, "USD", Now));
+            new RentalCancelledIntegrationEvent(RentalId, CustomerId, VehicleId, 150m, 0m, 150m, 0m, "USD", Now));
 
         var handled = await sut.HandleAsync(
             new RentalCompletedIntegrationEvent(RentalId, CustomerId, VehicleId, 150m, 0, "USD", Now));
@@ -154,7 +154,7 @@ public sealed class PolicyIssuerTests
         var sut = CreateSut();
         await sut.HandleAsync(Requested());
         await sut.HandleAsync(
-            new RentalCancelledIntegrationEvent(RentalId, CustomerId, VehicleId, 150m, 0m, 0m, "USD", Now));
+            new RentalCancelledIntegrationEvent(RentalId, CustomerId, VehicleId, 150m, 0m, 150m, 0m, "USD", Now));
 
         var handled = await sut.HandleAsync(
             new RentalExtendedIntegrationEvent(RentalId, CustomerId, VehicleId, Now.AddDays(30), 500m, "USD", Now));
