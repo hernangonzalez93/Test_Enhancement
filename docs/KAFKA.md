@@ -65,9 +65,236 @@ Todos los eventos de una misma renta caen en la misma partición y por tanto se 
 **en orden**. Con una sola partición todo está ordenado igual; la clave es lo que hace
 que siga funcionando el día que se escale a seis particiones.
 
+La sección siguiente desarrolla estas dos piezas —clave y partición— con
+demostraciones reales: por qué en la UI todo aparece en la partición 0, cómo se
+reparten las claves, quién decide qué lee cada consumidor y qué ocurre en un
+rebalanceo.
+
 ---
 
-## 3. El recorrido de un evento
+## 3. Particiones, claves y grupos: quién decide qué
+
+Esta es la parte que más confusión genera, así que va con demostraciones reales.
+
+### Por qué en la UI todo aparece en la partición 0
+
+Porque el topic tiene **una sola partición**. No hay ninguna otra a la que ir.
+
+```csharp
+new TopicSpecification
+{
+    Name = _options.Topic,
+    NumPartitions = 1,        // ← aquí
+    ReplicationFactor = 1
+}
+```
+
+La clave no está fallando: Kafka elige partición con
+`murmur2(clave) % nº_particiones`, y cualquier cosa `% 1` es siempre 0. La clave
+no tiene dónde elegir.
+
+### La clave sí decide, pero de muchos a uno
+
+Con un topic desechable de 3 particiones y claves distintas, el reparto real fue:
+
+```
+alfa                                      → partición 1
+bravo, delta, echo, hotel, india, lima    → partición 2
+charlie, foxtrot, golf, juliet, kilo      → partición 0
+
+renta-A  (3 mensajes)                     → los 3 a la partición 0
+renta-B  (2 mensajes)                     → los 2 a la partición 0
+```
+
+Las dos propiedades que importan quedan visibles:
+
+- **Claves distintas se reparten** entre las particiones.
+- **La misma clave cae siempre en la misma partición** — los tres mensajes de
+  `renta-A` juntos. Eso es lo que garantiza el orden por renta.
+
+Y la consecuencia que suele sorprender: **una partición contiene muchísimas claves
+distintas**, mezcladas e intercaladas en el mismo log.
+
+```
+partición 0:  [renta-A ev1][renta-K ev1][renta-A ev2][renta-Z ev1][renta-A ev3]
+                    ▲                        ▲                         ▲
+                    └──── el orden de renta-A entre sí se conserva ─────┘
+```
+
+Kafka **no** garantiza nada sobre el orden entre `renta-A` y `renta-K`. Solo que los
+eventos de una misma renta se leen como se escribieron, que es lo único que este
+sistema necesita: que `rental.requested` llegue antes que `rental.confirmed` **de la
+misma renta**.
+
+| | |
+|---|---|
+| Un `rentalId` → | exactamente **una** partición, siempre la misma |
+| Una partición → | **muchos** `rentalId` distintos, entremezclados |
+| El número de partición | no significa nada: es un hash, no un identificador |
+
+> Anécdota útil: al preparar esta demostración se usaron primero las claves
+> `renta-A` … `renta-E` y **las cinco cayeron en la partición 0**, lo que parecía
+> indicar que el particionado no funcionaba. Era casualidad (~0,4 % de probabilidad)
+> con cinco cadenas casi idénticas. Con doce claves bien distintas el reparto apareció
+> de inmediato. Moraleja: con pocas claves el hash reparte de forma muy desigual —el
+> reparto real fue 13 / 1 / 6—; con miles de ids se iguala.
+
+### El consumidor no busca: le asignan
+
+Aquí hay un cambio de modelo mental. Kafka no es una base de datos que consultas. **No
+existe** «dame los eventos de la renta X». En todo el consumidor no aparece la palabra
+partición:
+
+```csharp
+consumer.Subscribe(_options.Topic);                              // "quiero este topic entero"
+var result = consumer.Consume(TimeSpan.FromMilliseconds(500));   // "dame lo siguiente"
+```
+
+Lee lo que venga, en orden, y descarta lo que no le interesa:
+
+```csharp
+var (vehicleId, available) = integrationEvent switch
+{
+    RentalConfirmedIntegrationEvent e => (e.VehicleId, (bool?)false),
+    RentalCancelledIntegrationEvent e => (e.VehicleId, (bool?)true),
+    _ => (Guid.Empty, null)          // no me interesa, siguiente
+};
+```
+
+No hace falta buscar porque acabará viendo todos los mensajes de las particiones que
+tenga asignadas. Y quien asigna es el **coordinador del grupo**, dentro del broker. En
+los logs se ve:
+
+```
+Subscribed to rental-events as fleet-service.
+Partitions assigned: 0
+```
+
+Ese segundo mensaje es el callback que se añadió al arreglar el fallo 8 de la
+sección 12 de [`TESTING.md`](TESTING.md), y es también la señal de readiness:
+
+```csharp
+.SetPartitionsAssignedHandler((_, partitions) =>
+{
+    readiness.MarkReady();          // hasta aquí, /health/ready falla
+    logger.LogInformation("Partitions assigned: {Partitions}", ...);
+})
+```
+
+Buscar una renta concreta es una necesidad de **depuración**, no del sistema: se hace
+con el filtro por clave de Kafka UI, o —en las pruebas— leyendo todo y filtrando en
+memoria.
+
+### Los offsets son por partición
+
+No existe «el offset del topic». El offset es una posición **dentro de una
+partición**, y la salida del CLI lo dice literalmente:
+
+```
+rental-events:0:52
+      ▲        ▲  ▲
+   topic  partición offset
+```
+
+Cada partición numera desde cero de forma independiente:
+
+```
+demo-particiones:0:13
+demo-particiones:1:1
+demo-particiones:2:6
+```
+
+Un mensaje se identifica de forma única por la terna **(topic, partición, offset)**.
+
+El grupo también guarda su posición por partición. Por eso el comando de grupos tiene
+una columna `PARTITION`, y con 3 particiones daría **tres filas**:
+
+```
+GROUP           TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+fleet-service   rental-events   0          31              31              0
+fleet-service   rental-events   1          10              14              4     ← retrasada
+fleet-service   rental-events   2          11              11              0
+```
+
+Eso es muy útil al diagnosticar: si solo una partición acumula lag, no hay un problema
+de capacidad general, sino una instancia atascada o una clave «caliente». El lag que
+muestra Kafka UI por grupo es la **suma** de los lags por partición.
+
+Esas posiciones viven en el topic interno **`__consumer_offsets`**, con la clave
+**(grupo, topic, partición)**. Fíjate en lo que *no* forma parte de esa clave: la
+instancia. A Kafka le da igual qué proceso leyó qué.
+
+### El rebalanceo: cómo sabe la instancia nueva por dónde iba
+
+No lo sabe *ella*: lo sabe el broker.
+
+```
+Antes:   instancia A → particiones 0, 1
+         instancia B → partición 2
+
+Se cae A:
+
+1. El coordinador detecta que A dejó de enviar heartbeats
+2. REVOKE   → se retiran las asignaciones
+3. ASSIGN   → B recibe 0, 1 y 2
+4. B pregunta el offset confirmado de cada partición
+5. B reanuda: partición 0 desde 52, partición 1 desde 31, partición 2 desde 47
+```
+
+B no hereda nada de A; hereda **del grupo**. Es exactamente el mismo mecanismo por el
+que, al parar y arrancar `notifications-api` en la demostración del lag, el servicio
+retomó donde iba: su posición no estaba en la memoria del contenedor, estaba en el
+broker.
+
+Y aquí está el hueco que obliga a la idempotencia. Con `EnableAutoCommit = true` la
+posición se confirma cada ~5 s, no tras cada mensaje:
+
+```
+mensaje 31  procesado ✓   confirmado ✗
+mensaje 32  procesado ✓   confirmado ✗     ← A muere aquí
+mensaje 33  procesado ✓   confirmado ✗
+                            │
+                            └─ el broker sigue creyendo que el grupo va por 31
+```
+
+B reanuda en 31 y **reprocesa 31, 32 y 33**. Dicho de otro modo: **un consumidor no
+sabe con certeza cuáles ya procesó, solo cuáles quedaron confirmados**. Por eso los
+dos handlers toleran repeticiones (ver la sección 6).
+
+### Cuándo querrías más de una partición
+
+El motivo no es el rendimiento de escritura, es el **paralelismo de consumo**:
+
+> Dentro de un grupo, **cada partición la lee como máximo un consumidor**.
+
+Con una partición, escalar `fleet-service` a 3 réplicas dejaría a dos sin trabajo. Para
+que tres instancias trabajen a la vez hacen falta al menos 3 particiones.
+
+Al pasar a N particiones se pierde el orden global, pero **se conserva el que importa**:
+como la clave es el `rentalId`, los eventos de una misma renta siguen cayendo juntos.
+Para eso está esa clave.
+
+Aquí una sola partición es una decisión deliberada: da orden global gratis, es lo más
+simple de razonar y de probar, y no hay volumen que justifique más.
+
+### Si quieres cambiarlo
+
+```bash
+docker exec te-kafka kafka-topics --bootstrap-server kafka:29092 --alter --topic rental-events --partitions 3
+```
+
+Dos avisos:
+
+1. Es **irreversible**: no se pueden reducir particiones después.
+2. Los mensajes ya escritos **se quedan donde están**. Una renta con eventos antiguos
+   en la partición 0 podría tener los nuevos en la 2, rompiendo su orden. En producción
+   esto se hace en una ventana sin tráfico, o creando un topic nuevo.
+
+Para experimentar en local es seguro: `docker compose down -v` deja todo como nuevo.
+
+---
+
+## 4. El recorrido de un evento
 
 ```
 POST /api/rentals/{id}/confirm
@@ -96,7 +323,7 @@ notificar una renta que después no se guarda.
 
 ---
 
-## 4. Cómo viaja un mensaje, literalmente
+## 5. Cómo viaja un mensaje, literalmente
 
 Esto es una captura real del topic, tomada con el consumidor de consola:
 
@@ -128,7 +355,7 @@ Tres partes:
 
 ---
 
-## 5. Las decisiones de diseño de este proyecto
+## 6. Las decisiones de diseño de este proyecto
 
 | Decisión | Configuración | Por qué |
 |---|---|---|
@@ -180,7 +407,7 @@ Cubierto por `Reprocessing_the_same_event_changes_nothing` (Fleet) y
 
 ---
 
-## 6. El lag: la métrica que lo explica casi todo
+## 7. El lag: la métrica que lo explica casi todo
 
 > **lag = último offset del topic − offset confirmado por el grupo**
 >
@@ -217,7 +444,7 @@ anterior.
 
 ---
 
-## 7. La interfaz web
+## 8. La interfaz web
 
 **http://localhost:5105** (`kafbat/kafka-ui`)
 
@@ -238,7 +465,7 @@ Si estorba: `docker compose stop kafka-ui`. El resto del sistema no se entera.
 
 ---
 
-## 8. Tres experimentos para ver cosas moverse
+## 9. Tres experimentos para ver cosas moverse
 
 ### a) Ver nacer un evento
 
@@ -269,7 +496,7 @@ perdió nada.
 
 ---
 
-## 9. Lo mismo desde la línea de comandos
+## 10. Lo mismo desde la línea de comandos
 
 Todos verificados contra esta pila.
 
@@ -298,7 +525,7 @@ docker exec te-kafka kafka-console-consumer --bootstrap-server kafka:29092 --top
 
 ---
 
-## 10. Una limitación importante
+## 11. Una limitación importante
 
 Las pruebas con **Testcontainers levantan su propio broker efímero** en un puerto
 aleatorio, distinto del de compose. Kafka UI solo ve el clúster de `docker compose`.
