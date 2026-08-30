@@ -1,0 +1,203 @@
+name: CI
+
+# En cada pull request, y tambien al fusionar. Lo primero es la puerta que
+# protege main; lo segundo deja constancia de que main sigue verde despues de
+# la fusion, y mas adelante sera el disparador del despliegue a DEV.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Si llegan dos empujones seguidos a la misma rama, cancela el anterior: nadie
+# necesita el resultado de un commit que ya ha sido reemplazado.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Solo lectura. Este workflow no publica nada; cuando llegue el de despliegue
+# necesitara mas, y sera explicito alli.
+permissions:
+  contents: read
+
+env:
+  # Los tres carriles de la piramide, separados por lo que NECESITAN, no por lo
+  # que prueban. Es la misma division que documenta la seccion 3 de TESTING.md.
+  SIN_DOCKER: >-
+    Rentals.Domain.Tests
+    Rentals.Application.Tests
+    Rentals.Api.Tests
+    Pricing.Api.Tests
+    Notifications.Tests
+    Insurances.Api.Tests
+    Billing.Domain.Tests
+    Billing.Application.Tests
+    Billing.Api.Tests
+  CON_DOCKER: >-
+    Rentals.Infrastructure.Tests
+    Billing.Infrastructure.Tests
+    Fleet.Api.Tests
+    Rentals.Integration.Tests
+  CON_PILA: >-
+    Smoke.Tests
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Guarda: que ningun proyecto de pruebas se quede fuera de CI por olvido.
+  # ---------------------------------------------------------------------------
+  cobertura-de-carriles:
+    name: Todos los proyectos tienen carril
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que cada proyecto esta asignado
+        run: |
+          asignados=" $SIN_DOCKER $CON_DOCKER $CON_PILA "
+          faltan=0
+          for ruta in tests/*/; do
+            nombre=$(basename "$ruta")
+            # TestSupport son utilidades compartidas, no un proyecto de pruebas.
+            [ "$nombre" = "TestSupport" ] && continue
+            case "$asignados" in
+              *" $nombre "*) echo "  ok   $nombre" ;;
+              *) echo "::error::$nombre no esta asignado a ningun carril de CI"; faltan=1 ;;
+            esac
+          done
+          exit $faltan
+
+  # ---------------------------------------------------------------------------
+  # Carril 1: dos tercios de la suite, sin infraestructura de ningun tipo.
+  # ---------------------------------------------------------------------------
+  unitarias:
+    name: Unitarias y de API
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # No hay packages.lock.json, asi que la clave se calcula sobre los
+      # ficheros que determinan las dependencias.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restaurar
+        run: dotnet restore
+
+      - name: Compilar
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Probar
+        run: |
+          for proyecto in $SIN_DOCKER; do
+            echo "::group::$proyecto"
+            dotnet test "tests/$proyecto" --no-build --configuration Release
+            echo "::endgroup::"
+          done
+
+  # ---------------------------------------------------------------------------
+  # Carril 2: Testcontainers levanta sus propios contenedores efimeros.
+  # El runner de GitHub ya trae Docker, no hace falta ningun servicio auxiliar.
+  # ---------------------------------------------------------------------------
+  integracion:
+    name: Adaptadores e integracion
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restaurar
+        run: dotnet restore
+
+      - name: Compilar
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Probar
+        run: |
+          for proyecto in $CON_DOCKER; do
+            echo "::group::$proyecto"
+            dotnet test "tests/$proyecto" --no-build --configuration Release
+            echo "::endgroup::"
+          done
+
+  # ---------------------------------------------------------------------------
+  # Carril 3: la pila entera con docker compose, humo y navegador.
+  # ---------------------------------------------------------------------------
+  extremo-a-extremo:
+    name: Humo y E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Levantar la pila
+        run: docker compose up -d --wait
+
+      # Si algo no arranca, los logs de los diez contenedores son la unica
+      # pista util. Se publican pase lo que pase, no solo al fallar.
+      - name: Estado de los contenedores
+        if: always()
+        run: docker compose ps
+
+      - name: Pruebas de humo
+        run: |
+          for proyecto in $CON_PILA; do
+            dotnet test "tests/$proyecto"
+          done
+
+      - name: Instalar dependencias de E2E
+        working-directory: e2e
+        run: npm ci
+
+      - name: Instalar Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Publicar el informe de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7
+
+      - name: Logs de los contenedores si algo falla
+        if: failure()
+        run: docker compose logs --tail 200
