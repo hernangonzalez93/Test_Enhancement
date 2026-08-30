@@ -121,6 +121,7 @@ e2e/                              Playwright
 docs/TESTING.md                   Documento principal de la estrategia de pruebas
 docs/KAFKA.md                     Cómo funciona y cómo observar la mensajería
 docs/CONFIGURACION.md             Proveedores de configuración, prioridades y secretos
+docs/CICD.md                      Integración continua y, más adelante, despliegue
 ```
 
 ---
