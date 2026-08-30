@@ -1,11 +1,17 @@
+using Shared.Contracts;
+
 namespace Rentals.Api.Infrastructure;
 
 /// <summary>
-/// Propaga (o crea) un identificador de correlacion. Sirve para seguir una
-/// misma peticion desde el navegador hasta el mensaje de Kafka, y es lo que
-/// permite que una prueba E2E encuentre el evento que genero su clic.
+/// Propaga (o crea) un identificador de correlacion, y lo deja en tres sitios:
+/// la respuesta, el <see cref="Activity"/> en curso —de donde lo recoge el
+/// publicador de Kafka— y un ambito de log, para que TODA linea escrita durante
+/// la peticion lo lleve sin que nadie tenga que acordarse de anadirlo.
+///
+/// Es lo que permite seguir una misma operacion desde el navegador hasta el
+/// consumidor que reacciona al evento, tres servicios mas alla.
 /// </summary>
-public sealed class CorrelationIdMiddleware(RequestDelegate next)
+public sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<CorrelationIdMiddleware> logger)
 {
     public const string HeaderName = "X-Correlation-Id";
 
@@ -17,7 +23,11 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next)
 
         context.Items[HeaderName] = correlationId;
         context.Response.Headers[HeaderName] = correlationId;
+        CorrelationContext.Set(correlationId);
 
-        await next(context);
+        using (logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
+        {
+            await next(context);
+        }
     }
 }

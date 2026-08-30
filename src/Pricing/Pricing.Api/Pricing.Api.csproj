@@ -4,4 +4,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Shared.Hosting\Shared.Hosting.csproj" />
+  </ItemGroup>
 </Project>

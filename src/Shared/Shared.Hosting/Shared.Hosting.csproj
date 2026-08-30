@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Infraestructura de arranque comun a los seis servicios: validacion de
+       configuracion y logging estructurado. Nada de dominio, y ninguna
+       dependencia de ASP.NET: solo las abstracciones de configuracion y
+       logging, para que cualquier proceso pueda usarlo. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+</Project>

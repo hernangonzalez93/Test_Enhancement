@@ -4,8 +4,15 @@ using Rentals.Api.Infrastructure;
 using Rentals.Application;
 using Rentals.Infrastructure;
 using Rentals.Infrastructure.Persistence;
+using Shared.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Logging estructurado fuera de desarrollo, y un cortafuegos que impide
+// arrancar en un entorno real con la configuracion de la maquina de alguien.
+builder.Logging.AddStructuredConsole(builder.Environment.EnvironmentName);
+ConfigurationGuard.EnsureNoDevelopmentCredentials(builder.Configuration, builder.Environment.EnvironmentName);
+
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -43,6 +50,18 @@ app.MapHealthChecks("/health/ready");
 
 // Solo se migra cuando se pide explicitamente (contenedores). Las pruebas de
 // API con WebApplicationFactory arrancan sin base de datos y no deben tocarla.
+// Modo migracion: la MISMA imagen, invocada con `migrate`, aplica el esquema y
+// termina sin servir trafico. En un despliegue con varias tareas, migrar al
+// arrancar seria una carrera entre instancias; ademas obligaria a que el
+// usuario de la aplicacion tuviese permisos de DDL de forma permanente.
+// Con esto, migrar es un paso propio del pipeline, anterior y observable.
+if (args.Contains("migrate"))
+{
+    using var migrationScope = app.Services.CreateScope();
+    await migrationScope.ServiceProvider.GetRequiredService<RentalsDbContext>().Database.MigrateAsync();
+    return;
+}
+
 if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
 {
     using var scope = app.Services.CreateScope();

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 namespace Shared.Contracts;
 
 /// <summary>Nombres estables de los topicos de Kafka.</summary>
@@ -21,12 +22,39 @@ public static class IntegrationEventTypes
     public const string RentalExtended = "rental.extended";
 }
 
-/// <summary>Cabecera de Kafka que transporta el tipo de evento para enrutar sin deserializar.</summary>
+/// <summary>Cabeceras de Kafka que acompanan a cada mensaje.</summary>
 public static class EventHeaders
 {
+    /// <summary>Permite a los consumidores enrutar sin deserializar el cuerpo.</summary>
     public const string EventType = "event-type";
+
+    /// <summary>Identidad del evento, para detectar reprocesos.</summary>
     public const string EventId = "event-id";
+
+    /// <summary>
+    /// Cose las dos mitades de una operacion que cruza el broker. Sin ella, los
+    /// logs de quien publica y de quien consume no tienen nada en comun.
+    /// </summary>
     public const string CorrelationId = "correlation-id";
+}
+
+/// <summary>
+/// Transporta el identificador de correlacion a traves del <see cref="Activity"/>
+/// en curso, que .NET ya propaga por todo el arbol de llamadas asincronas.
+///
+/// La alternativa —inyectar un accesor por todas las capas— obligaria a que la
+/// infraestructura de mensajeria conociese algo del transporte HTTP. Aqui no
+/// hace falta: el middleware lo deposita, el publicador lo recoge, y ninguno de
+/// los dos sabe del otro.
+/// </summary>
+public static class CorrelationContext
+{
+    private const string BaggageKey = "correlation.id";
+
+    public static string? Current => Activity.Current?.GetBaggageItem(BaggageKey);
+
+    public static void Set(string correlationId) =>
+        Activity.Current?.SetBaggage(BaggageKey, correlationId);
 }
 
 public interface IIntegrationEvent

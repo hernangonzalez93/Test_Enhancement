@@ -32,6 +32,7 @@ env:
     Billing.Domain.Tests
     Billing.Application.Tests
     Billing.Api.Tests
+    Shared.Hosting.Tests
   CON_DOCKER: >-
     Rentals.Infrastructure.Tests
     Billing.Infrastructure.Tests
