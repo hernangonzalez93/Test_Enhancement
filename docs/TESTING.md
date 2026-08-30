@@ -765,6 +765,10 @@ Pregúntate si lo que quieres comprobar es **«¿mi lógica decide bien?»** o
 
 ## 7. Nivel 3.5 — API con `WebApplicationFactory`
 
+> Para el mecanismo que hace posible sustituir configuración desde una prueba —el orden
+> de los proveedores y por qué `UseSetting` gana a los ficheros— ver
+> [`CONFIGURACION.md`](CONFIGURACION.md).
+
 `tests/Rentals.Api.Tests`
 
 `WebApplicationFactory<T>` arranca la aplicación **completa en memoria**: enrutado,

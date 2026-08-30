@@ -14,6 +14,10 @@ usuario en un navegador real.
 > Y [`docs/KAFKA.md`](docs/KAFKA.md) para entender la mensajería: cómo viaja un
 > evento, qué significan las piezas (topic, clave, offset, grupo de consumo) y cómo
 > observarlo todo mientras corre.
+>
+> Y [`docs/CONFIGURACION.md`](docs/CONFIGURACION.md) para cómo se resuelve un valor de
+> configuración: el orden de las fuentes, la traducción de `__` a `:` y por qué la
+> misma imagen sirve para local y para producción.
 
 ---
 
@@ -116,6 +120,7 @@ frontend/                         React 19 + Vite, servido por nginx
 e2e/                              Playwright
 docs/TESTING.md                   Documento principal de la estrategia de pruebas
 docs/KAFKA.md                     Cómo funciona y cómo observar la mensajería
+docs/CONFIGURACION.md             Proveedores de configuración, prioridades y secretos
 ```
 
 ---
