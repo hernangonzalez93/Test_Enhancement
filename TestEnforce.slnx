@@ -26,6 +26,7 @@
   </Folder>
   <Folder Name="/src/Shared/">
     <Project Path="src/Shared/Shared.Contracts/Shared.Contracts.csproj" />
+    <Project Path="src/Shared/Shared.Hosting/Shared.Hosting.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Billing.Api.Tests/Billing.Api.Tests.csproj" />
@@ -41,6 +42,7 @@
     <Project Path="tests/Rentals.Domain.Tests/Rentals.Domain.Tests.csproj" />
     <Project Path="tests/Rentals.Infrastructure.Tests/Rentals.Infrastructure.Tests.csproj" />
     <Project Path="tests/Rentals.Integration.Tests/Rentals.Integration.Tests.csproj" />
+    <Project Path="tests/Shared.Hosting.Tests/Shared.Hosting.Tests.csproj" />
     <Project Path="tests/Smoke.Tests/Smoke.Tests.csproj" />
     <Project Path="tests/TestSupport/TestSupport.csproj" />
   </Folder>

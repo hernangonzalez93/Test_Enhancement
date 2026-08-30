@@ -105,6 +105,16 @@ public sealed class RentalEventsConsumer(
                     continue;
                 }
 
+                // El identificador de correlacion viene de quien publico, y abre un
+                // ambito que acompana a TODAS las lineas que escriba el manejo de
+                // este mensaje. Es lo que permite unir, en una sola busqueda, la
+                // peticion HTTP original con lo que ocurrio al otro lado del broker.
+                using var correlationScope = result.Message.Headers
+                    .TryGetLastBytes(EventHeaders.CorrelationId, out var correlationBytes)
+                        ? logger.BeginScope(new Dictionary<string, object>
+                            { ["CorrelationId"] = Encoding.UTF8.GetString(correlationBytes) })
+                        : null;
+
                 var eventType = Encoding.UTF8.GetString(typeBytes);
                 var integrationEvent = EventSerialization.Deserialize(eventType, result.Message.Value);
                 if (integrationEvent is null)

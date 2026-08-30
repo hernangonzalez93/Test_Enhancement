@@ -22,4 +22,9 @@ ENV ASPNETCORE_URLS=http://+:8080     ASPNETCORE_ENVIRONMENT=Production     DOTN
 COPY --from=build /app/publish .
 
 EXPOSE 8080
+# La imagen base define APP_UID=1654 y su usuario correspondiente. Los
+# servicios escuchan en 8080, por encima de 1024, asi que no hace falta
+# root para enlazar el puerto: correr como root aqui solo suma riesgo.
+USER $APP_UID
+
 ENTRYPOINT ["dotnet", "Insurances.Api.dll"]

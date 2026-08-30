@@ -43,15 +43,26 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDisposable
 
         foreach (var @event in events)
         {
+            var headers = new Headers
+            {
+                new Header(EventHeaders.EventType, Encoding.UTF8.GetBytes(@event.EventType)),
+                new Header(EventHeaders.EventId, Encoding.UTF8.GetBytes(@event.EventId.ToString()))
+            };
+
+            // Si la publicacion nace de una peticion HTTP, el middleware dejo el
+            // identificador en el Activity en curso. Si nace de otro sitio —una
+            // tarea de fondo, una prueba— sencillamente no viaja, y el consumidor
+            // lo trata como ausente en vez de fallar.
+            if (CorrelationContext.Current is { } correlationId)
+            {
+                headers.Add(new Header(EventHeaders.CorrelationId, Encoding.UTF8.GetBytes(correlationId)));
+            }
+
             var message = new Message<string, string>
             {
                 Key = @event.PartitionKey,
                 Value = EventSerialization.Serialize(@event),
-                Headers =
-                [
-                    new Header(EventHeaders.EventType, Encoding.UTF8.GetBytes(@event.EventType)),
-                    new Header(EventHeaders.EventId, Encoding.UTF8.GetBytes(@event.EventId.ToString()))
-                ]
+                Headers = headers
             };
 
             var result = await _producer.ProduceAsync(_options.RentalEventsTopic, message, cancellationToken);

@@ -1,6 +1,13 @@
 using Notifications.Api;
+using Shared.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Logging estructurado fuera de desarrollo, y un cortafuegos que impide
+// arrancar en un entorno real con la configuracion de la maquina de alguien.
+builder.Logging.AddStructuredConsole(builder.Environment.EnvironmentName);
+ConfigurationGuard.EnsureNoDevelopmentCredentials(builder.Configuration, builder.Environment.EnvironmentName);
+
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();

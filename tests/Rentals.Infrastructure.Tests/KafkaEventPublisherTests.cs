@@ -30,6 +30,32 @@ public sealed class KafkaEventPublisherTests(KafkaFixture fixture)
     }
 
     [Fact]
+    public async Task Carries_the_correlation_id_so_both_halves_of_an_operation_can_be_joined()
+    {
+        // El middleware HTTP deposita el identificador en el Activity en curso;
+        // aqui se simula ese estado sin arrancar una peticion real.
+        using var activity = new System.Diagnostics.Activity("prueba").Start();
+        CorrelationContext.Set("11111111-2222-3333-4444-555555555555");
+
+        await PublishAsync(SampleRequestedEvent());
+
+        var message = Consume(1).Single();
+        message.Message.Headers.TryGetLastBytes(EventHeaders.CorrelationId, out var bytes).ShouldBeTrue();
+        Encoding.UTF8.GetString(bytes).ShouldBe("11111111-2222-3333-4444-555555555555");
+    }
+
+    [Fact]
+    public async Task An_event_published_outside_a_request_simply_travels_without_correlation()
+    {
+        // Publicar desde una tarea de fondo es legitimo. La cabecera se omite y
+        // el consumidor lo trata como ausente, en vez de fallar o inventarse una.
+        await PublishAsync(SampleRequestedEvent());
+
+        var message = Consume(1).Single();
+        message.Message.Headers.TryGetLastBytes(EventHeaders.CorrelationId, out _).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Publishes_the_event_type_in_a_header_so_consumers_can_route_it()
     {
         var @event = SampleRequestedEvent();

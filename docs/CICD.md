@@ -6,7 +6,7 @@ documento crece con ellas.
 | Fase | Estado |
 |---|---|
 | 1. Integración continua | **Hecha** — este documento |
-| 2. Endurecer las imágenes | Pendiente |
+| 2. Endurecer las imágenes | **Hecha** — sección 5 |
 | 3. Infraestructura con Terraform | Pendiente |
 | 4. Primer despliegue con OIDC | Pendiente |
 | 5. El resto de la pila | Pendiente |
@@ -153,3 +153,122 @@ resto del *pipeline* no cambia.
 Y como la imagen ya existe desde que se fusionó a `main`, el despliegue a producción no
 compila nada: solo apunta el servicio al *digest* que ya está en el registro. Eso es lo
 que hace que promocionar sea rápido y aburrido, que es como debe ser.
+
+---
+
+## 5. Fase 2: endurecer las imágenes
+
+Cuatro cambios que no tocan una sola regla de negocio, pero sin los cuales
+desplegar sería imprudente.
+
+### Los contenedores dejan de correr como root
+
+Los seis `Dockerfile` añaden `USER $APP_UID` antes del `ENTRYPOINT`. La imagen
+oficial de ASP.NET ya define ese identificador (1654) y su usuario; solo había que
+usarlo. Los servicios escuchan en el 8080, por encima de 1024, así que no hace falta
+root ni para enlazar el puerto.
+
+```
+$ docker exec te-rentals id
+uid=1654(app) gid=1654(app) groups=1654(app)
+```
+
+### Migrar deja de ocurrir al arrancar
+
+Los tres servicios con base de datos aceptan ahora un argumento `migrate`: la **misma
+imagen**, invocada con esa palabra, aplica el esquema y termina sin servir tráfico.
+
+```bash
+docker run --rm testenforce-billing-api:latest migrate
+```
+
+Migrar al arrancar funciona con una instancia, que es el caso del compose, y por eso
+`Database:AutoMigrate` sigue existiendo y sigue activado ahí. Con varias tareas deja de
+funcionar por cuatro motivos independientes, y solo el primero se arregla con un
+bloqueo:
+
+1. Dos instancias que arrancan a la vez compiten por aplicar las mismas migraciones.
+2. La segunda espera a la primera, y si la migración es larga puede agotar el plazo de
+   la sonda de salud y ser reiniciada antes de llegar a arrancar.
+3. El usuario con el que la aplicación se conecta necesitaría permisos de DDL **de
+   forma permanente**, no solo durante el despliegue.
+4. Un despliegue progresivo tiene código viejo y nuevo conviviendo contra un esquema ya
+   migrado; eso es un problema de orden que ningún bloqueo resuelve.
+
+Usar la misma imagen y no un artefacto aparte garantiza que la versión de EF Core que
+migra es exactamente la que después lee.
+
+### Un cortafuegos contra la configuración de desarrollo
+
+[`ConfigurationGuard`](../src/Shared/Shared.Hosting/ConfigurationGuard.cs) revisa al
+arrancar todas las cadenas bajo `ConnectionStrings` y **detiene el proceso** si alguna
+apunta a la máquina local en un entorno que no sea `Development` o `Testing`:
+
+```
+Unhandled exception. Shared.Hosting.InsecureConfigurationException:
+La cadena de conexion 'BillingDatabase' apunta a la maquina local en el entorno
+'Production'. Casi con seguridad falta la variable de entorno
+ConnectionStrings__BillingDatabase. El servicio no arranca a proposito.
+```
+
+El escenario que evita no es que alguien escriba mal una contraseña, sino algo más
+silencioso: que **nadie defina la variable de entorno** que debía sobrescribir el
+`appsettings.json`, el servicio herede la cadena de desarrollo y arranque tan feliz,
+fallando solo en la primera petición que toque la base de datos. Fallar al arrancar
+convierte eso en un contenedor que no llega a declararse sano.
+
+El mensaje nombra la variable que falta a propósito: quien lo lea estará mirando un
+despliegue detenido, probablemente con prisa.
+
+### Logs estructurados y correlación de punta a punta
+
+Dos cambios que van juntos.
+
+**JSON fuera de desarrollo.** El código ya escribía con plantillas y parámetros
+nombrados, así que los campos existían; solo se aplanaban a texto al escribir. Con
+`AddJsonConsole` pasan a ser campos consultables. En desarrollo se mantiene la consola
+de texto, que es la que se lee cómoda en una terminal.
+
+Se bajaron además a `Warning` dos categorías ruidosas: `Microsoft.EntityFrameworkCore.
+Database.Command`, que a nivel `Information` escribe cada consulta SQL entera —los logs
+de Billing eran literalmente una pared de `SELECT`—, y `Confluent.Kafka`.
+
+**La correlación, que estaba a medio cablear.** Existía `CorrelationIdMiddleware`
+creando un identificador, y una constante `EventHeaders.CorrelationId` declarada en los
+contratos. Nadie leía ni escribía ninguno de los dos: el identificador moría en
+`context.Items`.
+
+Ahora recorre el sistema entero:
+
+```
+navegador ──X-Correlation-Id──► Rentals ──► Activity.Baggage ──► cabecera de Kafka
+                                   │                                    │
+                              ámbito de log                        ámbito de log
+                                                                        ▼
+                                                   Fleet · Insurances · Notifications · Billing
+```
+
+La pieza que lo hace limpio es
+[`CorrelationContext`](../src/Shared/Shared.Contracts/IntegrationEvents.cs), que usa el
+**baggage del `Activity` en curso**. La alternativa —inyectar un accesor por todas las
+capas— obligaría a que el adaptador de Kafka conociese algo del transporte HTTP. Con
+`Activity`, el middleware deposita y el publicador recoge sin que ninguno sepa del otro,
+y .NET se encarga de propagarlo por el árbol de llamadas asíncronas. Es además la base
+sobre la que se apoyarán las trazas distribuidas más adelante.
+
+Verificado contra la pila real: una petición con
+`X-Correlation-Id: aaaaaaaa-bbbb-...` aparece en los logs de Rentals y, tras cruzar
+Kafka, en los de Insurances y Notifications. Fleet y Billing solo la reciben con los
+eventos que cada uno consume, que es exactamente lo correcto.
+
+### Lo que esta fase demostró de la anterior
+
+Al añadir `Shared.Hosting.Tests` se dejó a propósito sin listar en los carriles de CI, y
+el trabajo `cobertura-de-carriles` lo detectó:
+
+```
+::error::Shared.Hosting.Tests no esta asignado a ningun carril de CI
+```
+
+Sin esa guarda, once pruebas nuevas no se habrían ejecutado nunca en CI y nadie se
+habría dado cuenta.
