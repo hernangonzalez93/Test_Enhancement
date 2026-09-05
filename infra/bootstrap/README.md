@@ -13,6 +13,6 @@ nunca se toca.
 export AWS_PROFILE=testenforce-b
 cd infra/bootstrap
 terraform init
-terraform plan -out=plan.tfplan
+terraform plan -out plan.tfplan
 terraform apply plan.tfplan
 ```
