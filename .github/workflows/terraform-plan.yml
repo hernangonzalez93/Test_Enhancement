@@ -1,0 +1,91 @@
+name: Terraform plan
+
+# Diagnostico: ejecucion nueva para descartar que el fallo venga del re-run.
+
+# Solo cuando cambia la infraestructura. Un cambio en el codigo de los
+# servicios no tiene por que ejecutar esto.
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-*.yml'
+
+concurrency:
+  group: terraform-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Necesario para pedir el token de OIDC con el que se asume el rol de AWS.
+  id-token: write
+  # Para dejar el plan como comentario en el pull request.
+  pull-requests: write
+
+jobs:
+  plan:
+    name: Planificar
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Sin `environment`, asi que el token OIDC lleva un `sub` de rama o de pull
+    # request. Ese `sub` solo casa con el rol de LECTURA: aunque alguien
+    # cambiase este fichero en un pull request, no podria tocar nada.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Asumir el rol de solo lectura
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN }}
+          aws-region: eu-west-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+
+      - name: Formato
+        working-directory: infra
+        run: terraform fmt -check -recursive
+
+      - name: Inicializar
+        working-directory: infra
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: Validar
+        working-directory: infra
+        run: terraform validate
+
+      # -lock=false porque el rol es de solo lectura y no puede escribir el
+      # fichero de bloqueo. Es seguro: un plan no modifica nada.
+      - name: Planificar
+        id: plan
+        working-directory: infra
+        run: |
+          terraform plan -input=false -lock=false -no-color -out=plan.tfplan | tee plan.txt
+          echo "resumen=$(grep -E '^Plan:|^No changes' plan.txt | tail -1)" >> "$GITHUB_OUTPUT"
+
+      # Que el plan aparezca en el pull request es lo que convierte esto en una
+      # revision de verdad: se aprueba viendo lo que va a pasar, no el codigo
+      # que lo describe.
+      - name: Comentar el plan en el pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: infra
+        run: |
+          {
+            echo "## Plan de Terraform"
+            echo
+            echo "\`${{ steps.plan.outputs.resumen }}\`"
+            echo
+            echo "<details><summary>Ver el plan completo</summary>"
+            echo
+            echo '```terraform'
+            # Se recorta: un comentario de GitHub no admite mas de 65536 caracteres.
+            head -c 60000 plan.txt
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "Al fusionar, este plan se aplica automaticamente."
+          } > comentario.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comentario.md
