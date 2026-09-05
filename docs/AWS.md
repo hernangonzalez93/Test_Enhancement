@@ -118,17 +118,21 @@ retention_in_days = var.log_retention_days   # 7
 Las migraciones tienen su propio grupo, separado del servicio: cuando una falla, quieres
 sus logs aislados y no mezclados con el tráfico normal.
 
-## 7. El estado, y su riesgo
+## 7. El estado, en S3
 
-Por ahora el estado es **local**. Es lo más simple y no cuesta nada, pero tiene un
-peligro real: si pierdes `terraform.tfstate`, Terraform deja de saber qué recursos
-existen, y te quedan huérfanos en AWS **cobrando sin que nada los gestione**.
+El estado vive en un bucket de S3, no en tu disco. La razón es que **GitHub Actions
+tiene que poder leerlo y escribirlo**: con estado local, un workflow no ve nada de lo
+aplicado y trataría de crearlo todo otra vez.
 
-Está en `.gitignore` porque contiene identificadores y valores sensibles. Cuando
-convenga, se migra a S3 sin rehacer nada:
+Lleva versionado, cifrado, acceso público bloqueado y `use_lockfile` para que dos
+`apply` simultáneos no se pisen. El detalle completo está en
+[`AWS-GITOPS.md`](AWS-GITOPS.md).
+
+El nombre del bucket **no está en el código**: lleva dentro el número de cuenta y este
+repositorio es público. Se pasa al inicializar:
 
 ```bash
-terraform init -migrate-state
+terraform init -backend-config="bucket=<nombre>"
 ```
 
 En cambio `.terraform.lock.hcl` **sí se versiona**: fija la versión exacta del proveedor
@@ -158,17 +162,11 @@ hayan agotado.
 
 ## 9. Cómo se aplica
 
-```bash
-export AWS_PROFILE=testenforce-b
-cd infra
-terraform init
-terraform plan -out=plan.tfplan
-terraform apply plan.tfplan
-```
+**No se aplica a mano.** Un *pull request* que toque `infra/` publica su plan como
+comentario, y fusionar lo aplica. Todo el detalle en [`AWS-GITOPS.md`](AWS-GITOPS.md).
 
-Guardar el plan en un fichero y aplicar **ese fichero** —en vez de `terraform apply` a
-secas— garantiza que se ejecuta exactamente lo que revisaste, y no lo que la
-infraestructura haya pasado a ser entre medias.
+La excepción es `infra/bootstrap/`, que crea el bucket del estado y los roles de OIDC:
+eso sí se aplica una vez desde tu equipo, porque es lo que hace posible todo lo demás.
 
 ### Aplicar y destruir por sesión
 

@@ -123,6 +123,7 @@ docs/KAFKA.md                     Cómo funciona y cómo observar la mensajería
 docs/CONFIGURACION.md             Proveedores de configuración, prioridades y secretos
 docs/CICD.md                      Integración continua y, más adelante, despliegue
 docs/AWS.md                       Infraestructura en AWS y decisiones de coste
+docs/AWS-GITOPS.md                Cómo se aplica la infraestructura desde Actions
 ```
 
 ---
