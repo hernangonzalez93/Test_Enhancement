@@ -7,7 +7,7 @@ documento crece con ellas.
 |---|---|
 | 1. Integración continua | **Hecha** — este documento |
 | 2. Endurecer las imágenes | **Hecha** — sección 5 |
-| 3. Infraestructura con Terraform | Pendiente |
+| 3. Infraestructura con Terraform | **Hecha** — ver [`AWS.md`](AWS.md) |
 | 4. Primer despliegue con OIDC | Pendiente |
 | 5. El resto de la pila | Pendiente |
 | 6. Verificación y vuelta atrás | Pendiente |

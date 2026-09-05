@@ -122,6 +122,7 @@ docs/TESTING.md                   Documento principal de la estrategia de prueba
 docs/KAFKA.md                     Cómo funciona y cómo observar la mensajería
 docs/CONFIGURACION.md             Proveedores de configuración, prioridades y secretos
 docs/CICD.md                      Integración continua y, más adelante, despliegue
+docs/AWS.md                       Infraestructura en AWS y decisiones de coste
 ```
 
 ---
