@@ -35,6 +35,26 @@ variable "project" {
   default = "testenforce"
 }
 
+variable "bucket_suffix" {
+  description = <<-EOT
+    Sufijo del nombre del bucket de estado. Solo hace falta cambiarlo si un
+    nombre anterior quedo retenido: al borrar un bucket, S3 no libera su nombre
+    al instante y crear otro igual falla con OperationAborted durante un rato.
+    Cambiar el sufijo evita esperar, porque el nombre solo tiene que ser unico.
+  EOT
+  type        = string
+  default     = "v2"
+}
+
+variable "expected_account_id" {
+  description = <<-EOT
+    Cuenta donde debe crearse todo. Si las credenciales apuntan a otra,
+    Terraform se niega a continuar en el plan, antes de crear nada.
+  EOT
+  type        = string
+  default     = "037169690600"
+}
+
 variable "github_repo" {
   description = "Repositorio autorizado a asumir los roles, en formato duenyo/repositorio."
   type        = string
@@ -44,11 +64,39 @@ variable "github_repo" {
 data "aws_caller_identity" "actual" {}
 
 # ---------------------------------------------------------------------------
+# 0. Guardia: que las credenciales apunten a la cuenta que se espera
+# ---------------------------------------------------------------------------
+# Se evalua durante el PLAN, antes de crear nada. Existe porque el fallo
+# contrario ya ocurrio: un plan guardado con un perfil se aplico con otro, y
+# los recursos aparecieron en la cuenta equivocada. El nombre del bucket venia
+# congelado en el fichero del plan, asi que ni siquiera resultaba evidente.
+# ---------------------------------------------------------------------------
+
+resource "terraform_data" "guardia_de_cuenta" {
+  input = data.aws_caller_identity.actual.account_id
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.actual.account_id == var.expected_account_id
+      error_message = <<-EOT
+        Cuenta equivocada.
+
+        Esperada : ${var.expected_account_id}
+        Actual   : ${data.aws_caller_identity.actual.account_id}
+
+        Revisa AWS_PROFILE. Si has abierto una terminal nueva, la variable se
+        perdio y estas usando el perfil por defecto.
+      EOT
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
 # 1. El bucket del estado
 # ---------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "estado" {
-  bucket = "${var.project}-tfstate-${data.aws_caller_identity.actual.account_id}"
+  bucket = "${var.project}-tfstate-${data.aws_caller_identity.actual.account_id}-${var.bucket_suffix}"
 
   # Se protege de un destroy accidental: el estado es lo unico que no se puede
   # reconstruir. Perderlo deja todos los recursos huerfanos en AWS.

@@ -107,7 +107,32 @@ toca. Crea el bucket, el proveedor de OIDC y los dos roles.
 Es el único sitio del proyecto donde el estado local es la respuesta correcta y no un
 atajo.
 
-## 6. Detalles que importan
+## 6. Dos guardias aprendidas a base de fallar
+
+Ambas salieron de errores reales cometidos montando esto.
+
+**La cuenta se comprueba durante el plan.** Un `terraform plan -out fichero` guarda el
+resultado **con los valores ya resueltos**, incluida la cuenta. Si después ese fichero se
+aplica en una terminal donde `AWS_PROFILE` no está puesto, los recursos se crean en la
+cuenta del perfil por defecto, mientras los nombres siguen diciendo lo que decía el plan.
+El resultado desconcierta: un bucket cuyo nombre lleva el número de una cuenta, creado en
+otra.
+
+```hcl
+precondition {
+  condition     = data.aws_caller_identity.actual.account_id == var.expected_account_id
+  error_message = "Cuenta equivocada..."
+}
+```
+
+Se evalúa antes de crear nada, así que el fallo aparece en el plan y no en la factura.
+
+**El nombre del bucket lleva sufijo.** Los nombres de bucket son únicos en todo S3, y al
+borrar uno, AWS **no libera su nombre al instante**: crear otro igual falla con
+`OperationAborted` durante un rato que puede pasar de la hora. Con `bucket_suffix` se
+cambia el nombre y no se espera, porque lo único que se le pide es ser único.
+
+## 7. Detalles que importan
 
 **`-lock=false` en el plan.** El rol de lectura no puede escribir el fichero de bloqueo.
 Es seguro: un plan no modifica nada.
@@ -123,7 +148,7 @@ con razón.
 **Filtro por `paths`.** Los dos workflows solo se disparan si cambia `infra/**` o ellos
 mismos. Un cambio en el código de los servicios no tiene por qué mover infraestructura.
 
-## 7. Lo que este modelo implica
+## 8. Lo que este modelo implica
 
 Conviene decirlo claro: **fusionar a `main` cambia infraestructura real.** No hay un
 paso manual de confirmación después.
@@ -137,7 +162,7 @@ Las defensas son tres, y hay que entenderlas como un conjunto:
 Si algún día esto apunta a producción, la cuarta defensa es un revisor obligatorio en el
 entorno, que hace que el trabajo se detenga y espere a una persona.
 
-## 8. Puesta en marcha
+## 9. Puesta en marcha
 
 Una sola vez, desde tu equipo:
 
