@@ -1,5 +1,7 @@
 name: Terraform plan
 
+# Diagnostico: ejecucion nueva para descartar que el fallo venga del re-run.
+
 # Solo cuando cambia la infraestructura. Un cambio en el codigo de los
 # servicios no tiene por que ejecutar esto.
 on:
