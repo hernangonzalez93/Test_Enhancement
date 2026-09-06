@@ -175,7 +175,57 @@ con razón.
 **Filtro por `paths`.** Los dos workflows solo se disparan si cambia `infra/**` o ellos
 mismos. Un cambio en el código de los servicios no tiene por qué mover infraestructura.
 
-## 8. Lo que este modelo implica
+## 8. El interruptor: apagar y volver a encender
+
+Con presupuesto limitado, lo mas rentable es tener la infraestructura levantada solo
+mientras se trabaja. Para eso esta el workflow **Terraform destroy**.
+
+No se dispara solo por nada: hay que entrar en la pestana Actions, pulsar *Run workflow*
+y **escribir `DESTRUIR` a mano**. Una palabra escrita no es gran defensa, pero convierte
+un clic accidental en una accion deliberada.
+
+### Destruir no borra el estado
+
+Es la parte que mas confunde, y conviene tenerla clara.
+
+El **estado** es la libreta donde Terraform anota que ha creado y con que
+identificadores. Al destruir, tacha las anotaciones —porque los recursos ya no
+existen— pero **la libreta sigue ahi**, vacia y en su bucket.
+
+Por eso volver a encender no tiene nada de especial: un `apply` lee la libreta vacia,
+ve que el codigo pide 26 recursos, y los crea. Es exactamente el mismo camino que la
+primera vez.
+
+```
+apply  ──►  26 recursos vivos, 26 anotaciones
+destroy ─►  0 recursos,        0 anotaciones   (la libreta sigue existiendo)
+apply  ──►  26 recursos vivos, 26 anotaciones
+```
+
+El workflow **guarda ademas una copia del estado antes de destruir**, publicada como
+artefacto durante 90 dias. Es la ultima red por si algo se tuerce a medio camino.
+
+### Una copia local, por si acaso
+
+El estado en S3 tiene versionado, asi que ya se protege de escrituras corruptas. Lo que
+el versionado no cubre es que desaparezca el bucket entero. Si quieres una copia en tu
+equipo:
+
+```bash
+$env:AWS_PROFILE = "testenforce-b"
+cd infra
+terraform state pull > copia-del-estado.json
+```
+
+Guardala fuera del repositorio: contiene identificadores y, segun los recursos, valores
+sensibles.
+
+**No la uses para aplicar.** Con dos copias del estado se acaba aplicando desde la
+equivocada, y entonces Terraform intenta crear cosas que ya existen o destruir cosas que
+no conoce. La copia es una fotografia para recuperar un desastre, no una segunda fuente
+de verdad.
+
+## 9. Lo que este modelo implica
 
 Conviene decirlo claro: **fusionar a `main` cambia infraestructura real.** No hay un
 paso manual de confirmación después.
@@ -189,7 +239,7 @@ Las defensas son tres, y hay que entenderlas como un conjunto:
 Si algún día esto apunta a producción, la cuarta defensa es un revisor obligatorio en el
 entorno, que hace que el trabajo se detenga y espere a una persona.
 
-## 9. Puesta en marcha
+## 10. Puesta en marcha
 
 Una sola vez, desde tu equipo:
 
