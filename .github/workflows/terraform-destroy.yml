@@ -1,7 +1,17 @@
-name: Terraform destroy
+name: "Nivel 2: destruir la infraestructura"
 
-# El interruptor de apagado. NO se dispara solo por nada: hay que venir aqui,
-# pulsar "Run workflow" y escribir la confirmacion a mano.
+# ---------------------------------------------------------------------------
+# NIVEL 2 del interruptor: borra TODO, incluido el balanceador.
+# ---------------------------------------------------------------------------
+# Es el unico que lleva el gasto a cero de verdad, porque el balanceador se
+# factura por hora mientras exista y no admite apagado. Volver cuesta unos
+# minutos —hay que recrearlo y volver a desplegar— frente a los segundos del
+# nivel 1.
+#
+# Para un descanso de horas, nivel 1. Para semanas, este.
+#
+# NO se dispara solo por nada: hay que venir aqui, pulsar "Run workflow" y
+# escribir la confirmacion a mano.
 #
 # Existe para no pagar por infraestructura que no se esta usando. Destruir no
 # borra el estado: el estado es la libreta donde Terraform anota lo que ha
