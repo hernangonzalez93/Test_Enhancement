@@ -41,6 +41,33 @@ public sealed class SmokeTests : IDisposable
         _ => NotificationsUrl
     };
 
+    /// <summary>
+    /// Que servicios existen en el entorno al que se apunta.
+    ///
+    /// En local estan los siete, asi que el valor por defecto los incluye
+    /// todos y nada cambia. En un despliegue parcial —como el de AWS, donde
+    /// de momento solo vive Pricing— se acota con SMOKE_SERVICES y el resto
+    /// de pruebas se SALTAN en lugar de fallar.
+    ///
+    /// La distincion importa: una prueba en rojo dice "esto esta roto", y una
+    /// saltada dice "esto no aplica aqui". Confundirlas ensena a ignorar el
+    /// rojo, que es la peor costumbre que puede coger una suite.
+    /// </summary>
+    private static readonly HashSet<string> Desplegados =
+        (Environment.GetEnvironmentVariable("SMOKE_SERVICES")
+         ?? "rentals,pricing,fleet,notifications,insurances,billing,frontend")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static void Requiere(params string[] servicios)
+    {
+        var ausentes = servicios.Where(s => !Desplegados.Contains(s)).ToArray();
+
+        Assert.SkipWhen(
+            ausentes.Length > 0,
+            $"No desplegado en este entorno: {string.Join(", ", ausentes)}");
+    }
+
     private readonly HttpClient _client = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     public void Dispose() => _client.Dispose();
@@ -54,6 +81,8 @@ public sealed class SmokeTests : IDisposable
     [InlineData("billing")]
     public async Task Every_service_answers_its_liveness_probe(string service)
     {
+        Requiere(service);
+
         var response = await _client.GetAsync($"{BaseUrlFor(service)}/health");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -67,6 +96,8 @@ public sealed class SmokeTests : IDisposable
     [InlineData("billing")]
     public async Task Every_service_answers_its_readiness_probe(string service)
     {
+        Requiere(service);
+
         var baseUrl = BaseUrlFor(service);
 
         // /health/ready es mas exigente que /health: solo responde 200 si el
@@ -79,6 +110,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task The_fleet_is_seeded_with_vehicles()
     {
+        Requiere("fleet");
+
         var vehicles = await _client.GetFromJsonAsync<JsonElement>($"{FleetUrl}/api/vehicles");
 
         vehicles.GetArrayLength().ShouldBeGreaterThan(0);
@@ -87,6 +120,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task The_rentals_database_has_its_migrations_applied()
     {
+        Requiere("rentals");
+
         // Si la migracion no se hubiera aplicado, esta consulta fallaria con 500.
         var response = await _client.GetAsync($"{RentalsUrl}/api/rentals?customerId={Guid.NewGuid()}");
 
@@ -96,6 +131,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task Pricing_answers_a_real_quote()
     {
+        Requiere("pricing");
+
         var response = await _client.PostAsJsonAsync(
             $"{PricingUrl}/api/quotes",
             new { vehicleClass = "economy", baseDailyRate = 30m, days = 3, extras = Array.Empty<string>(), currency = "USD" });
@@ -108,6 +145,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task The_frontend_is_served()
     {
+        Requiere("frontend");
+
         var response = await _client.GetAsync(FrontendUrl);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -117,6 +156,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task The_frontend_proxies_every_backend_service()
     {
+        Requiere("frontend", "rentals", "pricing", "fleet", "notifications", "insurances", "billing");
+
         // Una sola prueba cubre la configuracion de nginx, que es justo lo que
         // usan las pruebas E2E: si el proxy esta mal, fallan todas a la vez.
         (await _client.GetAsync($"{FrontendUrl}/api/vehicles")).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -134,6 +175,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task Insurances_answers_a_real_premium_quote()
     {
+        Requiere("insurances");
+
         var response = await _client.PostAsJsonAsync(
             $"{InsurancesUrl}/api/insurance/quotes",
             new { coverage = "standard", days = 3, rentalTotal = 150m, currency = "USD" });
@@ -147,6 +190,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task The_billing_database_has_its_migrations_applied()
     {
+        Requiere("billing");
+
         var response = await _client.GetAsync($"{BillingUrl}/api/invoices?customerId={Guid.NewGuid()}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -155,6 +200,8 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task An_end_to_end_rental_can_be_created_confirmed_and_notified()
     {
+        Requiere("rentals", "fleet", "notifications", "insurances");
+
         var customerId = Guid.NewGuid();
         var vehicles = await _client.GetFromJsonAsync<JsonElement>($"{FleetUrl}/api/vehicles?availableOnly=true");
         vehicles.GetArrayLength().ShouldBeGreaterThan(0);
