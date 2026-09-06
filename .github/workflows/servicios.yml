@@ -1,12 +1,17 @@
-name: Encender o apagar servicios
+name: "Nivel 1: encender o apagar servicios"
 
-# El interruptor de mano, para las tareas en marcha. Es distinto del de
-# "Terraform destroy": aquel borra la infraestructura entera, este solo pone a
-# cero lo que se factura por horas.
+# ---------------------------------------------------------------------------
+# NIVEL 1 del interruptor: para las tareas, deja la infraestructura en pie.
+# ---------------------------------------------------------------------------
+# Ahorra el computo (~9 $/mes por tarea) y vuelve en segundos. NO ahorra el
+# balanceador, que se factura por hora mientras exista y no se puede poner a
+# cero: para eso esta el nivel 2, "Terraform destroy".
 #
-# Casi todo el gasto de este proyecto son las tareas en marcha, asi que apagar
-# es suficiente para no pagar practicamente nada, y volver a encender tarda
-# menos de un minuto.
+#   Nivel 1  apagar      ~9 $/mes menos   vuelve en segundos
+#   Nivel 2  destruir    todo a cero      vuelve en minutos
+#
+# Para un descanso de horas o de un dia, nivel 1. Para semanas, nivel 2.
+# ---------------------------------------------------------------------------
 on:
   workflow_dispatch:
     inputs:
@@ -70,7 +75,13 @@ jobs:
               | while read n d r; do echo "| $n | $d | $r |"; done
             echo
             if [ "${{ inputs.accion }}" = "apagar" ]; then
-              echo "No se ha destruido nada: el cluster y la definicion de tarea siguen ahi."
-              echo "Para volver, lanza este mismo workflow con **encender**."
+              echo "No se ha destruido nada: el cluster, el balanceador y la definicion"
+              echo "de tarea siguen ahi. Para volver, este mismo workflow con **encender**."
+              echo
+              echo "### Lo que sigue costando"
+              echo
+              echo "El **balanceador** no se puede apagar: se factura por hora mientras"
+              echo "exista, unos 16 \$/mes. Si no vas a volver en semanas, usa el nivel 2"
+              echo "(**Terraform destroy**), que si lo elimina."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

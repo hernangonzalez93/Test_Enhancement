@@ -335,15 +335,23 @@ ya es cero, así que un `apply` posterior no vuelve a levantarlo.
 
 Hay tres formas de parar el gasto, de menos a más drástica. Conviene saber cuál usar.
 
-| | Qué hace | Cuándo |
-|---|---|---|
-| **Apagado nocturno** | Baja las tareas a cero, automático | Cada noche, por si se olvida |
-| **Encender o apagar servicios** | Lo mismo, a mano | Al terminar una sesión |
-| **Terraform destroy** | Borra la infraestructura entera | Si no vas a volver en semanas |
+| | Qué hace | Ahorra | Volver tarda |
+|---|---|---|---|
+| **Apagado nocturno** | Tareas a cero, automático | ~9 $/mes | segundos |
+| **Nivel 1: encender o apagar** | Lo mismo, a mano | ~9 $/mes | segundos |
+| **Nivel 2: destruir** | Borra todo | **todo** | minutos |
 
-Los dos primeros no destruyen nada: el clúster, los roles y la definición de tarea siguen
-existiendo, y volver tarda menos de un minuto. Solo dejan de existir los contenedores,
-que es lo único que se factura por horas.
+La diferencia entre los dos niveles está en **el balanceador**, y es la razón de que existan
+dos y no uno.
+
+Un balanceador **no se puede apagar**: o existe o no existe, y mientras exista se factura
+por hora. Es el único recurso del proyecto que no admite ponerse a cero. Por eso el nivel 1
+—que baja las tareas— deja de pagar el cómputo pero sigue pagando ~16 $/mes de balanceador.
+
+Regla práctica: **para un descanso de horas o un día, nivel 1. Para semanas, nivel 2.**
+
+Los dos primeros no destruyen nada: el clúster, el balanceador, los roles y la definición
+de tarea siguen existiendo. Solo dejan de existir los contenedores.
 
 ### Por qué no hay encendido automático
 

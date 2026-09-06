@@ -132,10 +132,25 @@ resource "aws_ecs_service" "pricing" {
   network_configuration {
     subnets = aws_subnet.publica[*].id
     # Sin NAT, la tarea necesita IP publica para descargar la imagen de ECR.
-    # No queda expuesta: el grupo de seguridad no admite ninguna entrada.
+    # No queda expuesta: el grupo de seguridad solo admite al balanceador.
     assign_public_ip = true
     security_groups  = [aws_security_group.servicios.id]
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.servicio["pricing-api"].arn
+    container_name   = "pricing-api"
+    container_port   = 8080
+  }
+
+  # Una aplicacion .NET tarda unos segundos en levantar. Sin esta gracia, el
+  # balanceador la declararia enferma antes de que llegue a arrancar y ECS la
+  # mataria en bucle, sin que el problema fuese la aplicacion.
+  health_check_grace_period_seconds = 60
+
+  # El escuchador tiene que existir antes que el servicio: si no, ECS registra
+  # destinos en un grupo al que todavia no llega trafico.
+  depends_on = [aws_lb_listener.servicio]
 
   lifecycle {
     ignore_changes = [
