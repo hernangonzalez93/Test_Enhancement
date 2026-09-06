@@ -1,0 +1,76 @@
+name: Encender o apagar servicios
+
+# El interruptor de mano, para las tareas en marcha. Es distinto del de
+# "Terraform destroy": aquel borra la infraestructura entera, este solo pone a
+# cero lo que se factura por horas.
+#
+# Casi todo el gasto de este proyecto son las tareas en marcha, asi que apagar
+# es suficiente para no pagar practicamente nada, y volver a encender tarda
+# menos de un minuto.
+on:
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: 'Que hacer con los servicios'
+        required: true
+        type: choice
+        options:
+          - apagar
+          - encender
+
+concurrency:
+  group: desplegar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cambiar:
+    name: Cambiar el estado
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+
+    steps:
+      - name: Asumir el rol de escritura
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY }}
+          aws-region: eu-west-1
+
+      - name: Aplicar
+        env:
+          ACCION: ${{ inputs.accion }}
+        run: |
+          if [ "$ACCION" = "encender" ]; then TAREAS=1; else TAREAS=0; fi
+
+          for servicio in pricing-api; do
+            aws ecs update-service \
+              --cluster testenforce \
+              --service "$servicio" \
+              --desired-count "$TAREAS" \
+              --no-cli-pager > /dev/null
+            echo "$servicio -> $TAREAS tarea(s)"
+          done
+
+          aws ecs wait services-stable --cluster testenforce --services pricing-api
+
+      - name: Estado final
+        if: always()
+        run: |
+          {
+            echo "## Servicios: ${{ inputs.accion }}"
+            echo
+            echo '| Servicio | Deseadas | En marcha |'
+            echo '|---|---:|---:|'
+            aws ecs describe-services --cluster testenforce --services pricing-api \
+              --query 'services[].[serviceName,desiredCount,runningCount]' --output text \
+              | while read n d r; do echo "| $n | $d | $r |"; done
+            echo
+            if [ "${{ inputs.accion }}" = "apagar" ]; then
+              echo "No se ha destruido nada: el cluster y la definicion de tarea siguen ahi."
+              echo "Para volver, lanza este mismo workflow con **encender**."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

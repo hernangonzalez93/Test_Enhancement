@@ -1,0 +1,120 @@
+name: Desplegar servicios
+
+# Al fusionar a main, si ha cambiado el codigo de los servicios. La
+# infraestructura tiene su propio workflow: son ritmos distintos, porque el
+# codigo cambia muchas veces al dia y la red casi nunca.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Directory.*.props'
+      - 'global.json'
+      - '.github/workflows/desplegar.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: desplegar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  desplegar:
+    name: Construir y desplegar
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Asumir el rol de escritura
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY }}
+          aws-region: eu-west-1
+
+      - name: Entrar en ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # La etiqueta es el SHA del commit, no "latest". Asi cada version tiene
+      # un nombre propio e inmutable: se sabe exactamente que hay corriendo, y
+      # volver atras es apuntar a una etiqueta anterior.
+      - name: Calcular la etiqueta
+        id: version
+        run: echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Construir y publicar la imagen
+        env:
+          REGISTRO: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          IMAGEN="$REGISTRO/testenforce/pricing-api:$TAG"
+          docker build -f src/Pricing/Pricing.Api/Dockerfile -t "$IMAGEN" .
+          docker push "$IMAGEN"
+          echo "IMAGEN=$IMAGEN" >> "$GITHUB_ENV"
+
+      # Se coge la definicion que ya existe, se le cambia solo la imagen y se
+      # registra como revision nueva. Asi el resto de la configuracion —CPU,
+      # memoria, logs, sondas— sigue siendo la que describe Terraform, y este
+      # workflow decide unicamente QUE VERSION corre.
+      - name: Registrar la revision nueva
+        id: tarea
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition testenforce-pricing-api \
+            --query 'taskDefinition' > actual.json
+
+          python - <<'PY'
+          import json
+          d = json.load(open('actual.json'))
+          for k in ('taskDefinitionArn', 'revision', 'status', 'requiresAttributes',
+                    'compatibilities', 'registeredAt', 'registeredBy'):
+              d.pop(k, None)
+          import os
+          d['containerDefinitions'][0]['image'] = os.environ['IMAGEN']
+          json.dump(d, open('nueva.json', 'w'))
+          PY
+
+          ARN=$(aws ecs register-task-definition --cli-input-json file://nueva.json \
+                  --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          echo "Registrada: $ARN"
+
+      # desired-count 1 hace las veces de encendido: si el apagado nocturno lo
+      # dejo a cero, desplegar vuelve a levantarlo.
+      - name: Desplegar
+        run: |
+          aws ecs update-service \
+            --cluster testenforce \
+            --service pricing-api \
+            --task-definition "${{ steps.tarea.outputs.arn }}" \
+            --desired-count 1 \
+            --no-cli-pager > /dev/null
+
+          echo "Esperando a que el servicio se estabilice..."
+          aws ecs wait services-stable --cluster testenforce --services pricing-api
+
+      - name: Donde ha quedado
+        run: |
+          TAREA=$(aws ecs list-tasks --cluster testenforce --service-name pricing-api \
+                    --query 'taskArns[0]' --output text)
+          ENI=$(aws ecs describe-tasks --cluster testenforce --tasks "$TAREA" \
+                  --query "tasks[0].attachments[0].details[?name=='networkInterfaceId'].value" --output text)
+          IP=$(aws ec2 describe-network-interfaces --network-interface-ids "$ENI" \
+                 --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+          {
+            echo "## Pricing desplegado"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Version | \`${{ steps.version.outputs.tag }}\` |"
+            echo "| IP publica | \`$IP\` |"
+            echo
+            echo "Todavia no hay balanceador —eso es la fase 5—, asi que la IP cambia"
+            echo "en cada despliegue. Se apagara solo esta noche."
+          } >> "$GITHUB_STEP_SUMMARY"

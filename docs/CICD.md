@@ -8,7 +8,7 @@ documento crece con ellas.
 | 1. Integración continua | **Hecha** — este documento |
 | 2. Endurecer las imágenes | **Hecha** — sección 5 |
 | 3. Infraestructura con Terraform | **Hecha** — ver [`AWS.md`](AWS.md) |
-| 4. Primer despliegue con OIDC | Parcial — infraestructura ya, ver [`AWS-GITOPS.md`](AWS-GITOPS.md) |
+| 4. Primer despliegue con OIDC | **Hecha** — sección 6 |
 | 5. El resto de la pila | Pendiente |
 | 6. Verificación y vuelta atrás | Pendiente |
 
@@ -272,3 +272,84 @@ el trabajo `cobertura-de-carriles` lo detectó:
 
 Sin esa guarda, once pruebas nuevas no se habrían ejecutado nunca en CI y nadie se
 habría dado cuenta.
+
+---
+
+## 6. Fase 4: construir y desplegar
+
+### Dos ritmos, dos workflows
+
+La infraestructura y el código cambian a velocidades muy distintas: el código, varias
+veces al día; la red, casi nunca. Por eso tienen workflows separados, cada uno con su
+filtro de rutas.
+
+| Workflow | Se dispara con | Qué hace |
+|---|---|---|
+| `Terraform apply` | Cambios en `infra/**` | Crea o modifica infraestructura |
+| `Desplegar servicios` | Cambios en `src/**` | Construye la imagen y la pone a correr |
+
+### Quién decide qué versión corre
+
+Es la separación que más cuesta ver al principio.
+
+**Terraform describe la *forma* del servicio**: cuánta CPU y memoria, dónde escribe los
+logs, qué sonda de salud tiene, en qué subredes vive.
+
+**El pipeline de despliegue decide *qué versión* está viva.**
+
+Si Terraform gestionara también la imagen, cada versión publicada sería un cambio de
+infraestructura, con su *pull request* y su plan. Por eso la definición de tarea lleva:
+
+```hcl
+lifecycle {
+  ignore_changes = [container_definitions]
+}
+```
+
+Y el despliegue coge la definición existente, le cambia **solo la imagen** y registra una
+revisión nueva. Todo lo demás sigue siendo lo que dice Terraform.
+
+### La etiqueta es el commit
+
+```
+sha-a1b2c3d
+```
+
+Nunca `latest`. Con `latest` no se puede saber qué está corriendo ni volver atrás; con el
+SHA, cada versión tiene un nombre propio e inmutable —el repositorio de ECR está
+configurado como `IMMUTABLE`— y revertir es apuntar a una etiqueta anterior.
+
+### El servicio nace apagado
+
+```hcl
+desired_count = 0
+```
+
+Nada corre, y por tanto nada se paga, hasta que alguien despliega o lo enciende. Es
+además lo que evita que el apagado nocturno se pelee con Terraform: el valor por defecto
+ya es cero, así que un `apply` posterior no vuelve a levantarlo.
+
+---
+
+## 7. Los tres interruptores
+
+Hay tres formas de parar el gasto, de menos a más drástica. Conviene saber cuál usar.
+
+| | Qué hace | Cuándo |
+|---|---|---|
+| **Apagado nocturno** | Baja las tareas a cero, automático | Cada noche, por si se olvida |
+| **Encender o apagar servicios** | Lo mismo, a mano | Al terminar una sesión |
+| **Terraform destroy** | Borra la infraestructura entera | Si no vas a volver en semanas |
+
+Los dos primeros no destruyen nada: el clúster, los roles y la definición de tarea siguen
+existiendo, y volver tarda menos de un minuto. Solo dejan de existir los contenedores,
+que es lo único que se factura por horas.
+
+### Por qué no hay encendido automático
+
+El apagado nocturno existe como red de seguridad contra el olvido. Un encendido
+automático sería lo contrario: haría que el gasto ocurriera **sin que nadie lo decida**.
+
+La asimetría es deliberada, y responde a algo cierto: **olvidarse de apagar es mucho más
+fácil que olvidarse de encender.** Si vas a trabajar, lo notas enseguida; si te dejas algo
+encendido un viernes, lo descubres en la factura.
