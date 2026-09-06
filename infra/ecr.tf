@@ -12,6 +12,15 @@ resource "aws_ecr_repository" "servicio" {
   name                 = "${var.project}/${each.key}"
   image_tag_mutability = "IMMUTABLE"
 
+  # Sin esto, `terraform destroy` falla con RepositoryNotEmptyException en
+  # cuanto el repositorio tenga una sola imagen, y deja la destruccion a
+  # medias: el balanceador borrado y el registro no.
+  #
+  # Es seguro aqui porque las imagenes se reconstruyen desde el codigo en
+  # cualquier momento: no son un dato, son un artefacto derivado. En un
+  # registro del que dependieran otros, esto NO deberia estar.
+  force_delete = true
+
   # Analisis de vulnerabilidades al subir. Es gratis en el nivel basico y no
   # hay razon para no tenerlo.
   image_scanning_configuration {

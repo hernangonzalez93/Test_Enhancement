@@ -99,12 +99,26 @@ jobs:
         working-directory: infra
         run: terraform apply -input=false -no-color destroy.tfplan
 
-      - name: Resultado
+      - name: Como volver
         if: always()
         run: |
           {
             echo
-            echo "El estado sigue existiendo, vacio. Para volver a levantarlo,"
-            echo "lanza el workflow **Terraform apply** o fusiona cualquier cambio"
-            echo "en \`infra/\`."
+            echo "## Como volver a levantarlo"
+            echo
+            echo "El estado sigue existiendo, vacio. Reconstruir son **dos workflows**,"
+            echo "en este orden:"
+            echo
+            echo "1. **Terraform apply** -> Run workflow. Recrea red, balanceador,"
+            echo "   registro y el servicio, este ultimo con cero tareas. Unos 4 minutos."
+            echo "2. **Desplegar servicios** -> Run workflow. Reconstruye la imagen, la"
+            echo "   sube y pone una tarea en marcha. Unos 6 minutos."
+            echo
+            echo "El segundo hace falta porque al destruir se borra tambien el registro"
+            echo "de imagenes. No se pierde nada: la imagen se reconstruye desde el"
+            echo "codigo, que es lo que la hace un artefacto y no un dato."
+            echo
+            echo "> El balanceador tendra un **DNS distinto** al de antes. Es inevitable:"
+            echo "> es un recurso nuevo. Por eso conviene un dominio propio en cuanto"
+            echo "> alguien mas dependa de esa direccion."
           } >> "$GITHUB_STEP_SUMMARY"
