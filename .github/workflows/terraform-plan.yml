@@ -12,6 +12,12 @@ concurrency:
   group: terraform-plan-${{ github.ref }}
   cancel-in-progress: true
 
+# El correo de los avisos de presupuesto viaja como secreto y no como variable:
+# es un dato personal y el repositorio es publico. Terraform recoge del entorno
+# cualquier TF_VAR_<nombre>, asi que llega sin tocar el codigo.
+env:
+  TF_VAR_budget_email: ${{ secrets.BUDGET_EMAIL }}
+
 permissions:
   contents: read
   # Necesario para pedir el token de OIDC con el que se asume el rol de AWS.

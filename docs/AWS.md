@@ -155,10 +155,42 @@ default_tags {
 Sin ellas, el gasto de este proyecto se mezcla con el resto de la cuenta y no hay forma
 de separarlo. Con ellas se puede filtrar en Cost Explorer y crear un presupuesto propio.
 
-Un detalle que se descubre tarde: **los créditos hacen que el gasto real sea 0 $, pero
-los presupuestos avisan sobre el gasto *antes* de aplicar créditos.** Eso es justo lo
-que quieres: enterarte del consumo mientras los créditos aún cubren, y no cuando se
-hayan agotado.
+### El presupuesto
+
+Un presupuesto mensual con tres avisos, definido en
+[`presupuesto.tf`](../infra/presupuesto.tf). Los dos primeros presupuestos de una cuenta
+son gratis.
+
+| Umbral | Tipo | Para qué |
+|---|---|---|
+| 50 % | Real | Enterarse de una tendencia, pronto |
+| 80 % | Real | Aviso serio |
+| 100 % | **Proyectado** | El único que avisa **antes** de llegar |
+
+El proyectado es el más valioso: AWS estima el gasto del mes según el ritmo actual, así
+que algo encendido por descuido un viernes salta el sábado y no el día 28.
+
+**La línea que lo hace útil aquí:**
+
+```hcl
+cost_types {
+  include_credit = false
+}
+```
+
+Por defecto AWS **resta los créditos** del coste. Con créditos disponibles, el
+presupuesto vería 0 $ y no avisaría nunca. Con esto vigila el gasto **bruto**: avisa de
+lo que se consume mientras los créditos todavía lo cubren, en lugar de descubrirlo
+cuando se agoten.
+
+**La cifra refleja lo que se espera gastar, no lo que uno podría permitirse.** Un
+presupuesto tan alto que nunca salta no detecta nada. Con la infraestructura actual en
+0 $, cualquier gasto es una sorpresa que merece un aviso; cuando lleguen la base de
+datos y el balanceador se sube deliberadamente.
+
+El correo llega como **secreto** de GitHub y no como variable, al revés que los ARN de
+rol: es un dato personal y el repositorio es público. Terraform recoge del entorno
+cualquier `TF_VAR_<nombre>`, así que no aparece en el código.
 
 ## 9. Cómo se aplica
 
