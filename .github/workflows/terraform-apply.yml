@@ -1,0 +1,77 @@
+name: Terraform apply
+
+# Al fusionar a main. En este modelo, fusionar ES desplegar la infraestructura:
+# por eso el plan se comenta en el pull request, para que la revision ocurra
+# ANTES y no despues.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-*.yml'
+  # Permite relanzarlo a mano si un apply se quedo a medias.
+  workflow_dispatch:
+
+# Sin cancelacion: interrumpir un apply a medias deja el estado inconsistente.
+# Si llegan dos fusiones seguidas, la segunda espera a que termine la primera.
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  apply:
+    name: Aplicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Esta linea es la barrera de seguridad, no una etiqueta decorativa. Hace
+    # que el token OIDC lleve `sub = repo:...:environment:dev`, que es la unica
+    # forma de asumir el rol de escritura. Un trabajo sin ella no puede aplicar
+    # nada, aunque corra en este mismo repositorio.
+    #
+    # Y es donde se anadirian revisores obligatorios el dia que exista `prod`.
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Asumir el rol de escritura
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY }}
+          aws-region: eu-west-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+
+      - name: Inicializar
+        working-directory: infra
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      # Se vuelve a planificar en lugar de reutilizar el plan del pull request.
+      # Entre la revision y la fusion pueden haber entrado otros cambios, y un
+      # plan guardado se aplicaria sobre un estado que ya no es el mismo.
+      - name: Planificar
+        working-directory: infra
+        run: terraform plan -input=false -no-color -out=plan.tfplan
+
+      - name: Aplicar
+        working-directory: infra
+        run: terraform apply -input=false -no-color plan.tfplan
+
+      - name: Resumen
+        if: always()
+        working-directory: infra
+        run: |
+          {
+            echo "## Infraestructura aplicada"
+            echo
+            echo '```'
+            terraform output -no-color 2>&1 || echo "sin salidas"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

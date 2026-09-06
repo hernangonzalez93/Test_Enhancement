@@ -1,0 +1,100 @@
+name: Terraform destroy
+
+# El interruptor de apagado. NO se dispara solo por nada: hay que venir aqui,
+# pulsar "Run workflow" y escribir la confirmacion a mano.
+#
+# Existe para no pagar por infraestructura que no se esta usando. Destruir no
+# borra el estado: el estado es la libreta donde Terraform anota lo que ha
+# creado, y al destruir se tachan las anotaciones pero la libreta sigue ahi.
+# Volver a encender es fusionar cualquier cosa, o relanzar el apply a mano.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribe DESTRUIR para confirmar'
+        required: true
+        type: string
+
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  destruir:
+    name: Destruir la infraestructura
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    # Mismo entorno que el apply: destruir necesita los mismos permisos de
+    # escritura, y por tanto la misma barrera.
+    environment: dev
+
+    steps:
+      # Una palabra escrita a mano no es gran defensa, pero convierte un clic
+      # accidental en una accion deliberada. Es la unica barrera que hay entre
+      # este boton y la infraestructura entera.
+      - name: Comprobar la confirmacion
+        run: |
+          if [ "${{ inputs.confirmacion }}" != "DESTRUIR" ]; then
+            echo "::error::Escribe DESTRUIR para confirmar. Recibido: '${{ inputs.confirmacion }}'"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Asumir el rol de escritura
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY }}
+          aws-region: eu-west-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+
+      - name: Inicializar
+        working-directory: infra
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      # Antes de destruir, se guarda una copia del estado. Es la ultima
+      # oportunidad de recuperarlo si algo sale mal a medio camino, y queda
+      # disponible como artefacto durante 90 dias.
+      - name: Guardar copia del estado
+        working-directory: infra
+        run: terraform state pull > estado-antes-de-destruir.json
+
+      - name: Publicar la copia
+        uses: actions/upload-artifact@v4
+        with:
+          name: estado-antes-de-destruir
+          path: infra/estado-antes-de-destruir.json
+          retention-days: 90
+
+      - name: Que se va a destruir
+        working-directory: infra
+        run: |
+          terraform plan -destroy -input=false -no-color -out=destroy.tfplan
+          terraform show -json destroy.tfplan > destroy.json
+          {
+            echo "## Se va a destruir esto"
+            echo
+            python ../.github/scripts/resumen_plan.py < destroy.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Destruir
+        working-directory: infra
+        run: terraform apply -input=false -no-color destroy.tfplan
+
+      - name: Resultado
+        if: always()
+        run: |
+          {
+            echo
+            echo "El estado sigue existiendo, vacio. Para volver a levantarlo,"
+            echo "lanza el workflow **Terraform apply** o fusiona cualquier cambio"
+            echo "en \`infra/\`."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,13 @@
+# El estado contiene identificadores y, en algunos recursos, valores sensibles.
+# Nunca se versiona. Mientras sea local, es tu unica copia: perderlo significa
+# que Terraform deja de saber que existe en AWS y te quedan recursos huerfanos.
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Los planes guardados son binarios y efimeros.
+*.tfplan
+
+# Los valores concretos son de cada uno; el ejemplo si se versiona.
+*.tfvars
+!*.tfvars.example

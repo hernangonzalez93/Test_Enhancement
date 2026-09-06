@@ -1,0 +1,8 @@
+# Copia este fichero a terraform.tfvars y ajusta lo que necesites.
+# terraform.tfvars esta en .gitignore: no se versiona.
+
+region      = "eu-west-1"
+environment = "dev"
+
+# Servicios que se despliegan en la nube. La pila completa sigue en compose.
+services = ["rentals-api", "pricing-api"]
