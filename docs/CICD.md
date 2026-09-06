@@ -350,6 +350,32 @@ por hora. Es el único recurso del proyecto que no admite ponerse a cero. Por es
 
 Regla práctica: **para un descanso de horas o un día, nivel 1. Para semanas, nivel 2.**
 
+### Cómo se vuelve del nivel 2
+
+Destruir no borra el estado, así que reconstruir es repetir el camino normal. Son **dos
+workflows a mano**, en este orden:
+
+| | Workflow | Qué hace | Tarda |
+|---|---|---|---|
+| 1 | `Terraform apply` | Red, balanceador, registro y el servicio con cero tareas | ~4 min |
+| 2 | `Desplegar servicios` | Reconstruye la imagen, la sube y arranca una tarea | ~6 min |
+
+Hace falta el segundo porque **al destruir se borra también el registro de imágenes**. No
+se pierde nada: una imagen se reconstruye desde el código, y eso es justo lo que la hace
+un artefacto y no un dato.
+
+Dos cosas que cambian al volver:
+
+**El balanceador tendrá otro DNS.** Es un recurso nuevo, así que su dirección es nueva. Es
+inevitable, y es el argumento más fuerte para poner un dominio propio en cuanto alguien
+más dependa de esa dirección.
+
+**El repositorio de imágenes lleva `force_delete = true`.** Sin eso, `terraform destroy`
+falla con `RepositoryNotEmptyException` en cuanto haya una sola imagen dentro, y deja la
+destrucción a medias: el balanceador borrado y el registro no. Es seguro aquí porque las
+imágenes son artefactos derivados; en un registro del que dependieran otros equipos, no
+debería estar.
+
 Los dos primeros no destruyen nada: el clúster, el balanceador, los roles y la definición
 de tarea siguen existiendo. Solo dejan de existir los contenedores.
 
