@@ -55,10 +55,29 @@ variable "expected_account_id" {
   default     = "037169690600"
 }
 
-variable "github_repo" {
-  description = "Repositorio autorizado a asumir los roles, en formato duenyo/repositorio."
+variable "github_owner" {
+  description = "Duenyo del repositorio autorizado."
   type        = string
-  default     = "hernangonzalez93/Test_Enhancement"
+  default     = "hernangonzalez93"
+}
+
+variable "github_repo_name" {
+  description = "Nombre del repositorio autorizado."
+  type        = string
+  default     = "Test_Enhancement"
+}
+
+# GitHub intercala identificadores numericos inmutables en el `sub` del token:
+#   repo:duenyo@54007107/repositorio@1350632847:pull_request
+#
+# Lo hace por seguridad: si renombras el repositorio o el usuario, alguien
+# podria registrar el nombre que dejaste libre y heredar tu confianza en AWS.
+# Los identificadores numericos no se reciclan, asi que eso es imposible.
+#
+# El patron tiene que tolerar esos @id sin dejar de ser restrictivo: sigue
+# admitiendo solo este duenyo y solo este repositorio.
+locals {
+  github_sub_prefix = "repo:${var.github_owner}@*/${var.github_repo_name}@*"
 }
 
 data "aws_caller_identity" "actual" {}
@@ -198,7 +217,7 @@ data "aws_iam_policy_document" "confianza_plan" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      values   = ["${local.github_sub_prefix}:*"]
     }
   }
 }
@@ -230,13 +249,19 @@ data "aws_iam_policy_document" "confianza_apply" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Exactamente el entorno `dev` de este repositorio. Un trabajo que no
+    # El entorno `dev` de este repositorio, y nada mas. Un trabajo que no
     # declare `environment: dev` no puede asumir este rol, por mucho que se
     # ejecute en el mismo repositorio.
+    #
+    # StringLike y no StringEquals porque el patron lleva comodines para los
+    # identificadores numericos que GitHub intercala. Con StringEquals el
+    # asterisco se compara como caracter literal y la condicion no casaria
+    # nunca. El sufijo `:environment:dev` sigue siendo exacto, que es lo que
+    # importa: el comodin solo cubre los identificadores.
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:environment:dev"]
+      values   = ["${local.github_sub_prefix}:environment:dev"]
     }
   }
 }

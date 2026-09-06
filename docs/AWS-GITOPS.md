@@ -127,6 +127,33 @@ precondition {
 
 Se evalúa antes de crear nada, así que el fallo aparece en el plan y no en la factura.
 
+**El `sub` del token lleva identificadores numéricos.** GitHub ya no emite
+`repo:duenyo/repositorio:pull_request`, sino:
+
+```
+repo:hernangonzalez93@54007107/Test_Enhancement@1350632847:pull_request
+```
+
+Es una mejora de seguridad real: si renombras el repositorio, alguien podría registrar el
+nombre que dejaste libre y **heredar tu confianza en AWS**. Los identificadores numéricos
+no se reciclan, así que ese ataque desaparece.
+
+El patrón tiene que tolerarlos sin dejar de ser restrictivo:
+
+```
+repo:hernangonzalez93@*/Test_Enhancement@*:environment:dev
+```
+
+Y con comodines hay que usar **`StringLike`, nunca `StringEquals`**: en `StringEquals` el
+asterisco se compara como carácter literal y la condición no casa jamás. El sufijo
+`:environment:dev` sigue siendo exacto, que es lo que importa; el comodín solo cubre los
+identificadores.
+
+Cuando OIDC falla y la configuración *parece* correcta, el sitio donde mirar es
+**CloudTrail**: registra el intento fallido con el `sub` real que se presentó. El error de
+AWS es deliberadamente opaco —decir por qué falla ayudaría a un atacante—, así que
+comparar lo esperado con lo recibido es la única vía rápida.
+
 **El nombre del bucket lleva sufijo.** Los nombres de bucket son únicos en todo S3, y al
 borrar uno, AWS **no libera su nombre al instante**: crear otro igual falla con
 `OperationAborted` durante un rato que puede pasar de la hora. Con `bucket_suffix` se
