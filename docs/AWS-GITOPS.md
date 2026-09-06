@@ -172,6 +172,21 @@ request*. Entre la revisión y la fusión pueden haber entrado otros cambios, y 
 guardado se aplicaría sobre un estado que ya no es el mismo. Terraform lo rechazaría, y
 con razón.
 
+**Toda variable obligatoria va en los TRES workflows.** Es fácil olvidarse, y ya pasó
+una vez: al añadir el presupuesto se cableó `TF_VAR_budget_email` en *plan* y en *apply*,
+pero no en *destroy*. El resultado fue un `destroy` que fallaba antes de empezar:
+
+```
+Error: No value for required variable
+```
+
+Terraform necesita **todas** las variables definidas incluso para destruir, porque tiene
+que evaluar la configuración entera antes de decidir qué elimina. No basta con que la
+variable no afecte a lo que se va a borrar.
+
+La regla, entonces: **una variable obligatoria nueva se añade a `terraform-plan.yml`,
+`terraform-apply.yml` y `terraform-destroy.yml`, los tres.**
+
 **Filtro por `paths`.** Los dos workflows solo se disparan si cambia `infra/**` o ellos
 mismos. Un cambio en el código de los servicios no tiene por qué mover infraestructura.
 

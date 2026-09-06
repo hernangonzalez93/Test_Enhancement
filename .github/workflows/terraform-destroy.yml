@@ -29,6 +29,13 @@ concurrency:
   group: terraform-apply
   cancel-in-progress: false
 
+# Terraform necesita TODAS las variables definidas incluso para destruir: tiene
+# que poder evaluar la configuracion entera antes de decidir que elimina. Sin
+# esto falla con "No value for required variable" y el destroy no llega a
+# empezar.
+env:
+  TF_VAR_budget_email: ${{ secrets.BUDGET_EMAIL }}
+
 permissions:
   contents: read
   id-token: write
