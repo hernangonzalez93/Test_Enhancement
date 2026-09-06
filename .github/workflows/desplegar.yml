@@ -44,6 +44,17 @@ jobs:
       # La etiqueta es el SHA del commit, no "latest". Asi cada version tiene
       # un nombre propio e inmutable: se sabe exactamente que hay corriendo, y
       # volver atras es apuntar a una etiqueta anterior.
+      # Se anota a que version habria que volver ANTES de desplegar. Si se
+      # apunta despues, ya se ha perdido la referencia.
+      - name: Anotar la version actual
+        id: anterior
+        run: |
+          ARN=$(aws ecs describe-services --cluster testenforce --services pricing-api --query 'services[0].taskDefinition' --output text)
+          CUANTAS=$(aws ecs describe-services --cluster testenforce --services pricing-api --query 'services[0].desiredCount' --output text)
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          echo "tareas=$CUANTAS" >> "$GITHUB_OUTPUT"
+          echo "Version actual: $ARN (con $CUANTAS tarea/s)"
+
       - name: Calcular la etiqueta
         id: version
         run: echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
@@ -99,22 +110,62 @@ jobs:
           echo "Esperando a que el servicio se estabilice..."
           aws ecs wait services-stable --cluster testenforce --services pricing-api
 
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Averiguar la direccion del balanceador
+        id: balanceador
+        run: |
+          DNS=$(aws elbv2 describe-load-balancers --names testenforce --query 'LoadBalancers[0].DNSName' --output text)
+          echo "dns=$DNS" >> "$GITHUB_OUTPUT"
+
+      # El momento de la verdad. Las mismas pruebas que corren en local contra
+      # docker compose, ahora contra AWS: solo cambian las variables de entorno.
+      # SMOKE_SERVICES acota a lo que hay desplegado, y el resto se salta en
+      # lugar de fallar.
+      - name: Pruebas de humo contra el despliegue
+        id: humo
+        continue-on-error: true
+        env:
+          SMOKE_SERVICES: pricing
+          SMOKE_PRICING_URL: http://${{ steps.balanceador.outputs.dns }}:5102
+        run: dotnet test tests/Smoke.Tests
+
+      # Si el humo falla, se vuelve a la version anterior sin esperar a que
+      # nadie mire. Es la diferencia entre "desplegar" y "desplegar con red".
+      - name: Volver atras si el humo ha fallado
+        if: steps.humo.outcome == 'failure'
+        run: |
+          echo "::error::El humo ha fallado. Volviendo a ${{ steps.anterior.outputs.arn }}"
+          aws ecs update-service --cluster testenforce --service pricing-api --task-definition "${{ steps.anterior.outputs.arn }}" --no-cli-pager > /dev/null
+          aws ecs wait services-stable --cluster testenforce --services pricing-api
+          echo "Revertido."
+
+      - name: Fallar si hubo que volver atras
+        if: steps.humo.outcome == 'failure'
+        run: |
+          {
+            echo "## Despliegue revertido"
+            echo
+            echo "La version \`${{ steps.version.outputs.tag }}\` no paso las pruebas de humo."
+            echo "El servicio ha vuelto solo a la version anterior."
+            echo
+            echo "La imagen sigue en el registro: se puede examinar sin prisa."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
       - name: Donde ha quedado
         run: |
-          TAREA=$(aws ecs list-tasks --cluster testenforce --service-name pricing-api \
-                    --query 'taskArns[0]' --output text)
-          ENI=$(aws ecs describe-tasks --cluster testenforce --tasks "$TAREA" \
-                  --query "tasks[0].attachments[0].details[?name=='networkInterfaceId'].value" --output text)
-          IP=$(aws ec2 describe-network-interfaces --network-interface-ids "$ENI" \
-                 --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
           {
-            echo "## Pricing desplegado"
+            echo "## Pricing desplegado y verificado"
             echo
             echo "| | |"
             echo "|---|---|"
             echo "| Version | \`${{ steps.version.outputs.tag }}\` |"
-            echo "| IP publica | \`$IP\` |"
+            echo "| Direccion | http://${{ steps.balanceador.outputs.dns }}:5102 |"
+            echo "| Humo | pasado |"
             echo
-            echo "Todavia no hay balanceador —eso es la fase 5—, asi que la IP cambia"
-            echo "en cada despliegue. Se apagara solo esta noche."
+            echo "Se apagara solo esta noche. Para apagarlo antes, el workflow"
+            echo "**Nivel 1: encender o apagar servicios**."
           } >> "$GITHUB_STEP_SUMMARY"
