@@ -40,14 +40,17 @@ resource "aws_service_discovery_service" "kafka" {
     routing_policy = "MULTIVALUE"
   }
 
-  # Deja que sea ECS quien confirme si la instancia esta sana, en vez de que
-  # Cloud Map sondee por su cuenta. Es lo correcto aqui: ECS ya sabe si la
-  # tarea vive, y una sonda propia seria una segunda fuente de verdad que
-  # podria contradecirle.
+  # SIN bloque health_check_custom_config, y es deliberado.
   #
-  # El bloque va vacio a proposito: su unico argumento, failure_threshold,
-  # esta deprecado porque AWS lo fija siempre a 1.
-  health_check_custom_config {}
+  # Ese bloque le diria a Cloud Map "no sondees tu, ya lo hace ECS", que es lo
+  # correcto conceptualmente. El problema es practico: su unico argumento esta
+  # deprecado, un bloque vacio NO se guarda en el estado, y el bloque obliga a
+  # recrear el recurso. Resultado: cada plan queria destruir y recrear el
+  # registro DNS de Kafka sin que nada hubiese cambiado.
+  #
+  # Omitirlo no cambia el comportamiento: ECS registra la tarea al arrancarla y
+  # la da de baja al pararla igualmente, y un espacio de nombres privado no
+  # admite sondas de Route 53, asi que Cloud Map tampoco iba a sondear nada.
 
   tags = { Name = "${var.project}-kafka" }
 }

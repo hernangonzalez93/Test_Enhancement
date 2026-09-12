@@ -90,6 +90,20 @@ jobs:
 
           aws ecs wait services-stable --cluster testenforce --services kafka pricing-api
 
+          # La base de datos no tiene "cero tareas": se para y se arranca, y es
+          # una llamada distinta. Ademas tarda varios minutos en cada sentido,
+          # asi que se lanza y no se espera.
+          ESTADO=$(aws rds describe-db-instances --db-instance-identifier testenforce                      --query 'DBInstances[0].DBInstanceStatus' --output text 2>/dev/null || echo ausente)
+          echo "Base de datos: $ESTADO"
+
+          if [ "$ACCION" = "encender" ] && [ "$ESTADO" = "stopped" ]; then
+            aws rds start-db-instance --db-instance-identifier testenforce --no-cli-pager > /dev/null
+            echo "Arrancando la base de datos (tarda unos minutos)."
+          elif [ "$ACCION" = "apagar" ] && [ "$ESTADO" = "available" ]; then
+            aws rds stop-db-instance --db-instance-identifier testenforce --no-cli-pager > /dev/null
+            echo "Parando la base de datos."
+          fi
+
       - name: Estado final
         if: always()
         run: |
@@ -108,8 +122,17 @@ jobs:
               echo
               echo "### Lo que sigue costando"
               echo
-              echo "El **balanceador** no se puede apagar: se factura por hora mientras"
-              echo "exista, unos 16 \$/mes. Si no vas a volver en semanas, usa el nivel 2"
-              echo "(**Terraform destroy**), que si lo elimina."
+              echo "| Recurso | Estado | Sigue costando |"
+              echo "|---|---|---|"
+              echo "| Tareas | a cero | no |"
+              echo "| Base de datos | parada | ~2 \$/mes de almacenamiento |"
+              echo "| Balanceador | **encendido** | ~16 \$/mes |"
+              echo
+              echo "El balanceador no se puede apagar, y una base de datos parada sigue"
+              echo "pagando su disco. Para dejarlo a cero de verdad hace falta el"
+              echo "**Nivel 2**, que lo destruye todo."
+              echo
+              echo "> AWS vuelve a encender una base de datos parada **a los 7 dias**."
+              echo "> Si vas a estar mas de una semana sin tocarla, usa el nivel 2."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

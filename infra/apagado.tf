@@ -69,6 +69,15 @@ data "aws_iam_policy_document" "apagar" {
     # hacer una cosa sobre un sitio concreto.
     resources = ["arn:aws:ecs:${var.region}:${data.aws_caller_identity.actual.account_id}:service/${aws_ecs_cluster.principal.name}/*"]
   }
+
+  # Parar la base de datos, y solo esta. Una instancia de RDS no tiene
+  # "cero tareas": o esta encendida o esta parada, y pararla es una llamada
+  # distinta de bajar un servicio de ECS.
+  statement {
+    effect    = "Allow"
+    actions   = ["rds:StopDBInstance"]
+    resources = [aws_db_instance.principal.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "apagar" {
@@ -115,4 +124,41 @@ resource "aws_scheduler_schedule" "apagado" {
 output "apagado_nocturno" {
   description = "Cuando se apagan los servicios automaticamente."
   value       = "${var.apagado_cron} (${var.apagado_zona_horaria})"
+}
+
+# ---------------------------------------------------------------------------
+# Y la base de datos, que se para de otra manera
+# ---------------------------------------------------------------------------
+# Un servicio de ECS se apaga poniendolo a cero tareas. Una instancia de RDS no
+# tiene ese concepto: se para, y es una llamada distinta.
+#
+# DOS ADVERTENCIAS que conviene tener presentes:
+#
+#   1. Parada NO es gratis. Se deja de pagar el computo —lo caro— pero se sigue
+#      pagando el almacenamiento, unos 2 $/mes por los 20 GB. Para dejarlo a
+#      cero de verdad hace falta el nivel 2.
+#
+#   2. AWS la vuelve a encender sola a los 7 dias. Es una politica suya, para
+#      poder aplicar mantenimiento. Si se va a estar mas de una semana sin
+#      tocarla, mejor destruirla que dejarla parada.
+# ---------------------------------------------------------------------------
+
+resource "aws_scheduler_schedule" "apagar_base_de_datos" {
+  name                         = "${var.project}-apagar-bd"
+  description                  = "Para la base de datos cada noche"
+  schedule_expression          = var.apagado_cron
+  schedule_expression_timezone = var.apagado_zona_horaria
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:rds:stopDBInstance"
+    role_arn = aws_iam_role.planificador.arn
+
+    input = jsonencode({
+      DbInstanceIdentifier = aws_db_instance.principal.identifier
+    })
+  }
 }

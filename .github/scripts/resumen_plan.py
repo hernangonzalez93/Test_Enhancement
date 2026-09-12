@@ -43,6 +43,8 @@ CATALOGO = {
     "aws_db_instance": ("Datos", "base de datos"),
     "aws_db_subnet_group": ("Datos", "grupo de subredes de base de datos"),
     "aws_s3_bucket": ("Datos", "bucket de S3"),
+    "aws_ssm_parameter": ("Configuracion", "parametro"),
+    "random_password": ("Configuracion", "contrasenya generada"),
     "aws_lb": ("Entrada", "balanceador de carga"),
     "aws_lb_target_group": ("Entrada", "grupo de destinos"),
     "aws_lb_listener": ("Entrada", "escuchador"),
@@ -56,7 +58,7 @@ CATALOGO = {
 # Recursos que empiezan a facturar en cuanto existen, aunque nadie los use.
 # Es la unica pregunta economica que importa al revisar un plan.
 FACTURABLES = {
-    "aws_db_instance": "por hora encendida",
+    "aws_db_instance": "por hora encendida; parada sigue pagando el disco, ~2 $/mes",
     "aws_lb": "por hora, unos 16 $/mes",
     "aws_nat_gateway": "por hora, unos 32 $/mes",
     "aws_instance": "por hora encendida",
@@ -93,6 +95,8 @@ PLURALES = {
     "base de datos": "bases de datos",
     "grupo de subredes de base de datos": "grupos de subredes de base de datos",
     "bucket de S3": "buckets de S3",
+    "parametro": "parametros",
+    "contrasenya generada": "contrasenyas generadas",
     "balanceador de carga": "balanceadores de carga",
     "grupo de destinos": "grupos de destinos",
     "escuchador": "escuchadores",
