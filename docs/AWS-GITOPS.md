@@ -187,6 +187,9 @@ variable no afecte a lo que se va a borrar.
 La regla, entonces: **una variable obligatoria nueva se añade a `terraform-plan.yml`,
 `terraform-apply.yml` y `terraform-destroy.yml`, los tres.**
 
+*(Esa variable en concreto ya no está: el presupuesto se movió al bootstrap para que
+sobreviva a los `destroy`. Pero la regla sigue valiendo para cualquier otra.)*
+
 **Filtro por `paths`.** Los dos workflows solo se disparan si cambia `infra/**` o ellos
 mismos. Un cambio en el código de los servicios no tiene por qué mover infraestructura.
 

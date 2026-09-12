@@ -1,10 +1,17 @@
 # ---------------------------------------------------------------------------
 # Presupuesto y alarmas de coste
 # ---------------------------------------------------------------------------
-# Esta cuenta esta dedicada a este proyecto, asi que el presupuesto vigila el
-# gasto total y no hace falta filtrar por etiqueta. Filtrar por etiqueta exige
-# ademas activarla antes como "cost allocation tag" en la consola de
-# facturacion, y tarda hasta 24 horas en empezar a funcionar.
+# Vive en el BOOTSTRAP y no en infra/ a proposito, y la razon se aprendio
+# fallando: estaba en infra/, se lanzo el destroy, y la alarma de coste
+# desaparecio junto con lo que vigilaba.
+#
+# Una red de seguridad no debe destruirse con aquello de lo que protege. Aqui
+# sobrevive a cualquier ciclo de destruir y recrear, y cubre tambien lo que se
+# cree a mano en la consola mientras la pila esta desmontada.
+#
+# Esta cuenta esta dedicada a este proyecto, asi que vigila el gasto total sin
+# filtrar por etiqueta. Filtrar exigiria activarla antes como "cost allocation
+# tag", con hasta 24 horas de espera.
 #
 # Los dos primeros presupuestos de una cuenta son gratis.
 # ---------------------------------------------------------------------------
@@ -24,7 +31,13 @@ variable "budget_amount" {
 }
 
 variable "budget_email" {
-  description = "Correo que recibe los avisos. Llega por secreto, nunca por el codigo."
+  description = <<-EOT
+    Correo que recibe los avisos. Nunca va en el codigo: el repositorio es
+    publico y es un dato personal.
+
+    Como el bootstrap se aplica a mano, se pone en terraform.tfvars —que esta
+    en .gitignore— en lugar de llegar por un secreto de GitHub.
+  EOT
   type        = string
   sensitive   = true
 }
