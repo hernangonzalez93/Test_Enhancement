@@ -10,11 +10,20 @@ RUN npm run build
 # asi que este era el unico contenedor del proyecto que seguia siendo root
 # despues de la fase 2.
 #
-# ESTA IMAGEN SOLO SE USA EN LOCAL. En AWS el frontal se sirve desde S3 con
-# CloudFront delante: para tres ficheros estaticos, mantener un contenedor vivo
-# es pagar ~9 $/mes y tener algo mas que acordarse de apagar.
+# Esta imagen se usa en compose Y en AWS cuando `frontal = "nginx"`. Lo que
+# cambia entre los dos sitios no es la imagen, son las variables de entorno:
+# la configuracion se genera al arrancar a partir de la plantilla.
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# En /etc/nginx/templates, no en conf.d: el arranque de la imagen procesa lo
+# que hay aqui, sustituye las ${VARIABLES} y deja el resultado en conf.d.
+COPY templates/default.conf.template /etc/nginx/templates/default.conf.template
 COPY proxy_headers.inc /etc/nginx/conf.d/proxy_headers.inc
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# Hace que la imagen lea su propio /etc/resolv.conf y exponga los servidores
+# DNS del sistema como NGINX_LOCAL_RESOLVERS. Es la diferencia entre "funciona
+# en compose" y "funciona donde lo pongas".
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+
 EXPOSE 8080

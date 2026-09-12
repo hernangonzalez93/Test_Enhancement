@@ -101,10 +101,25 @@ locals {
 
   frontal_nginx = var.frontal != "nginx" ? {} : {
     "frontend" = {
-      variables = {}
-      secretos  = {}
-      migra     = false
-      sonda     = local.sonda_nginx
+      # A donde manda nginx cada ruta /api. En compose estos mismos nombres son
+      # `rentals-api`, el DNS que Docker regala; aqui son los del DNS privado de
+      # la VPC. La imagen es la misma: lo que cambia son estas variables.
+      variables = {
+        "API_RENTALS"       = "rentals.${local.interno}:8080"
+        "API_FLEET"         = "fleet.${local.interno}:8080"
+        "API_NOTIFICATIONS" = "notifications.${local.interno}:8080"
+        "API_PRICING"       = "pricing.${local.interno}:8080"
+
+        # Insurances y Billing no estan desplegados en AWS. Se les da el nombre
+        # que TENDRIAN: el DNS no lo resuelve y la peticion muere en un 502, que
+        # dice la verdad ("ese servicio no esta"). Dejar la variable sin valor
+        # no seria mas honesto, seria peor: nginx no arrancaria.
+        "API_INSURANCES" = "insurances.${local.interno}:8080"
+        "API_BILLING"    = "billing.${local.interno}:8080"
+      }
+      secretos = {}
+      migra    = false
+      sonda    = local.sonda_nginx
     }
   }
 
