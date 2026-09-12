@@ -91,12 +91,13 @@ resource "aws_iam_role_policy" "apagar" {
 # ---------------------------------------------------------------------------
 
 resource "aws_scheduler_schedule" "apagado" {
-  # Un servicio nuevo se anade aqui, o se quedara encendido toda la noche
-  # sin que nadie lo note hasta ver la factura.
-  for_each = {
-    pricing = aws_ecs_service.pricing.name
-    kafka   = aws_ecs_service.kafka.name
-  }
+  # TODOS los servicios de ECS, sin enumerarlos. Antes habia una lista a mano,
+  # y una lista a mano se olvida: un servicio nuevo se habria quedado encendido
+  # toda la noche sin que nadie lo notase hasta ver la factura.
+  for_each = merge(
+    { for nombre, s in aws_ecs_service.servicio : nombre => s.name },
+    { kafka = aws_ecs_service.kafka.name }
+  )
 
   name                         = "${var.project}-apagar-${each.key}"
   description                  = "Baja ${each.value} a cero tareas cada noche"

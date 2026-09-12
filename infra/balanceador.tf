@@ -29,7 +29,7 @@ resource "aws_lb" "principal" {
 # ---------------------------------------------------------------------------
 
 resource "aws_lb_target_group" "servicio" {
-  for_each = toset(var.services)
+  for_each = var.services
 
   name     = "${var.project}-${replace(each.key, "-api", "")}"
   port     = 8080
@@ -76,7 +76,7 @@ resource "aws_lb_target_group" "servicio" {
 # ---------------------------------------------------------------------------
 
 resource "aws_lb_listener" "servicio" {
-  for_each = { for i, s in var.services : s => 5101 + i }
+  for_each = var.services
 
   load_balancer_arn = aws_lb.principal.arn
   port              = each.value
@@ -98,7 +98,6 @@ output "balanceador" {
 output "urls" {
   description = "Donde responde cada servicio."
   value = {
-    for s, p in { for i, s in var.services : s => 5101 + i } :
-    s => "http://${aws_lb.principal.dns_name}:${p}"
+    for s, p in var.services : s => "http://${aws_lb.principal.dns_name}:${p}"
   }
 }
