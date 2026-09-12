@@ -1,0 +1,95 @@
+server {
+    # 8080 como el resto de servicios, y por encima de 1024 para no
+    # necesitar privilegios.
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # ESTE FICHERO ES UNA PLANTILLA, no la configuracion final.
+    #
+    # La imagen de nginx la procesa al arrancar y sustituye cada ${VARIABLE}
+    # por lo que valga en el entorno. Gracias a eso el MISMO contenedor sirve
+    # en compose y en Fargate, que son dos mundos con DNS distinto:
+    #
+    #   compose  el DNS de Docker, y los vecinos se llaman `rentals-api`
+    #   Fargate  el DNS de la VPC, y los vecinos se llaman
+    #            `rentals.testenforce.local`
+    #
+    # NGINX_LOCAL_RESOLVERS lo rellena la propia imagen leyendo el
+    # /etc/resolv.conf del contenedor, activandolo con
+    # NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1. Es decir: nginx pregunta a quien le
+    # diga el sistema, sin que nadie escriba una direccion a mano.
+    #
+    # Sin `resolver`, nginx resuelve los nombres UNA SOLA VEZ al cargar la
+    # configuracion: si despues se recrea un servicio, su IP cambia y nginx
+    # sigue enviando a la antigua. Con `resolver` mas una variable en
+    # proxy_pass, vuelve a resolver en cada peticion y la pila aguanta
+    # reinicios parciales. En AWS esto no es un lujo: cada despliegue le
+    # cambia la IP a todas las tareas.
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+
+    # Sonda propia. El balanceador la usa para decidir si mandar trafico, y no
+    # puede ser `/` porque eso devolveria el SPA entero en cada comprobacion.
+    location = /health {
+        access_log off;
+        add_header Content-Type application/json;
+        return 200 '{"status":"Healthy","service":"frontend"}';
+    }
+
+    # Enrutado del lado del cliente: cualquier ruta desconocida devuelve el SPA.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Un unico origen para el navegador; nginx reparte por servicio.
+    # Al usar variables hay que pasar $request_uri de forma explicita, porque
+    # nginx ya no reescribe la URI automaticamente.
+    location /api/rentals {
+        set $destino ${API_RENTALS};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+
+    location /api/vehicles {
+        set $destino ${API_FLEET};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+
+    location /api/notifications {
+        set $destino ${API_NOTIFICATIONS};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+
+    location /api/insurance {
+        set $destino ${API_INSURANCES};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+
+    location /api/policies {
+        set $destino ${API_INSURANCES};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+
+    location /api/invoices {
+        set $destino ${API_BILLING};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+
+    location /api/quotes {
+        set $destino ${API_PRICING};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+
+    location /api/pricing {
+        set $destino ${API_PRICING};
+        proxy_pass http://$destino$request_uri;
+        include /etc/nginx/conf.d/proxy_headers.inc;
+    }
+}
