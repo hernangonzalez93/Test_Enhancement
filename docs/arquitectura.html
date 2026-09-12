@@ -1,0 +1,778 @@
+<title>TestEnforce en eu-west-1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+  :root {
+    --ground:      #F6F7F9;
+    --surface:     #FFFFFF;
+    --surface-alt: #EDEFF3;
+    --ink:         #12171F;
+    --ink-soft:    #39424F;
+    --muted:       #5B6573;
+    --line:        #D9DEE5;
+    --line-soft:   #E7EAEF;
+    --accent:      #0F5E6B;
+    --accent-soft: #E2F0F1;
+
+    --publica:      #E6F1F2;
+    --publica-bord: #7FB2BA;
+    --privada:      #E7EAF0;
+    --privada-bord: #8B9CB8;
+    --region:       #FBFCFD;
+
+    --sg-alb:   #0B6E7F;
+    --sg-serv:  #3A5CA8;
+    --sg-kafka: #7B4B9E;
+    --sg-bd:    #2C6E49;
+
+    --vivo:     #2C6E49;
+    --vivo-bg:  #E4F0E8;
+    --parado:   #B45309;
+    --parado-bg:#FAEDDC;
+
+    --sans:  'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --mono:  'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0D1116;
+      --surface:     #151B22;
+      --surface-alt: #1D242D;
+      --ink:         #E7EBF0;
+      --ink-soft:    #C0C8D2;
+      --muted:       #8B96A5;
+      --line:        #2A323C;
+      --line-soft:   #222932;
+      --accent:      #4FB3C4;
+      --accent-soft: #14323A;
+
+      --publica:      #133034;
+      --publica-bord: #3E7C86;
+      --privada:      #1A2130;
+      --privada-bord: #4A5B78;
+      --region:       #11161C;
+
+      --sg-alb:   #4FB3C4;
+      --sg-serv:  #7E9BE0;
+      --sg-kafka: #BB8FD9;
+      --sg-bd:    #6FCF97;
+
+      --vivo:     #6FCF97;
+      --vivo-bg:  #163024;
+      --parado:   #E0A050;
+      --parado-bg:#33260F;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0D1116;
+    --surface:     #151B22;
+    --surface-alt: #1D242D;
+    --ink:         #E7EBF0;
+    --ink-soft:    #C0C8D2;
+    --muted:       #8B96A5;
+    --line:        #2A323C;
+    --line-soft:   #222932;
+    --accent:      #4FB3C4;
+    --accent-soft: #14323A;
+
+    --publica:      #133034;
+    --publica-bord: #3E7C86;
+    --privada:      #1A2130;
+    --privada-bord: #4A5B78;
+    --region:       #11161C;
+
+    --sg-alb:   #4FB3C4;
+    --sg-serv:  #7E9BE0;
+    --sg-kafka: #BB8FD9;
+    --sg-bd:    #6FCF97;
+
+    --vivo:     #6FCF97;
+    --vivo-bg:  #163024;
+    --parado:   #E0A050;
+    --parado-bg:#33260F;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 1.5rem 5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 62rem; margin: 0 auto; }
+  .narrow { max-width: 36rem; }
+
+  header { padding: 3.5rem 0 2rem; border-bottom: 2px solid var(--ink); }
+
+  .eyebrow {
+    font-family: var(--sans); font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 1rem;
+  }
+
+  h1 {
+    font-family: var(--sans); font-weight: 700;
+    font-size: clamp(1.9rem, 5vw, 2.7rem); line-height: 1.05;
+    letter-spacing: -0.025em; text-wrap: balance; margin: 0 0 0.9rem;
+  }
+
+  .standfirst { font-size: 1.1rem; color: var(--ink-soft); margin: 0; max-width: 34rem; }
+
+  section { margin-top: 3.5rem; }
+
+  h2 {
+    font-family: var(--sans); font-weight: 600; font-size: 1.4rem;
+    letter-spacing: -0.02em; text-wrap: balance;
+    margin: 0 0 0.5rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--line);
+  }
+
+  h3 {
+    font-family: var(--sans); font-weight: 600; font-size: 1rem;
+    margin: 2rem 0 0.4rem;
+  }
+
+  p { margin: 0 0 1rem; }
+  section > p:first-of-type { margin-top: 1.1rem; }
+
+  code {
+    font-family: var(--mono); font-size: 0.84em;
+    background: var(--surface-alt); padding: 0.1em 0.36em; border-radius: 2px;
+  }
+
+  strong { font-weight: 600; }
+
+  figure { margin: 1.8rem 0 0; }
+
+  .lienzo {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 1rem;
+  }
+
+  .lienzo svg { display: block; min-width: 44rem; max-width: 100%; height: auto; }
+
+  figcaption {
+    font-family: var(--sans); font-size: 0.85rem; color: var(--muted);
+    margin-top: 0.7rem; max-width: 40rem;
+  }
+
+  .tw { overflow-x: auto; margin: 1.4rem 0; border: 1px solid var(--line); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 0.86rem; background: var(--surface); }
+  th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-size: 0.66rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); background: var(--surface-alt); }
+  tr:last-child td { border-bottom: none; }
+  td.mono { font-family: var(--mono); font-size: 0.8rem; white-space: nowrap; }
+
+  .pastilla {
+    font-family: var(--sans); font-size: 0.66rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0.2rem 0.42rem; border-radius: 2px; white-space: nowrap;
+  }
+  .vivo { background: var(--vivo-bg); color: var(--vivo); }
+  .parado { background: var(--parado-bg); color: var(--parado); }
+
+  .nota {
+    background: var(--surface); border-left: 2px solid var(--accent);
+    padding: 0.9rem 1.1rem; margin: 1.5rem 0; font-size: 0.97rem;
+  }
+  .nota p { margin: 0; }
+  .nota p + p { margin-top: 0.6rem; }
+
+  footer {
+    margin-top: 4rem; padding-top: 1.3rem; border-top: 1px solid var(--line);
+    font-family: var(--sans); font-size: 0.8rem; color: var(--muted);
+  }
+
+  /* --- texto dentro de los diagramas --- */
+  .d-titulo { font-family: var(--sans); font-size: 12px; font-weight: 600; fill: var(--ink); }
+  .d-zona   { font-family: var(--sans); font-size: 10.5px; font-weight: 600; fill: var(--muted); letter-spacing: 0.06em; }
+  .d-cidr   { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+  .d-caja   { font-family: var(--sans); font-size: 11.5px; font-weight: 500; fill: var(--ink); }
+  .d-sub    { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); }
+  .d-flecha { font-family: var(--sans); font-size: 10px; fill: var(--accent); font-weight: 500; }
+  .d-nota   { font-family: var(--sans); font-size: 10px; fill: var(--muted); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Infraestructura desplegada · 12 de septiembre de 2026</p>
+  <h1>TestEnforce en eu-west-1</h1>
+  <p class="standfirst">Lo que hay ahora mismo en la cuenta: una VPC con cuatro subredes, seis servicios en ECS, PostgreSQL aislado y el frontal sirviendo la aplicación desde el balanceador.</p>
+</header>
+
+<section>
+  <h2>La topología</h2>
+
+  <p class="narrow">Dos zonas de disponibilidad, porque tanto el balanceador como el grupo de subredes de RDS lo exigen. Y dos niveles: lo que puede salir a internet y lo que no.</p>
+
+  <figure>
+    <div class="lienzo">
+      <svg viewBox="0 0 980 640" role="img" aria-label="La VPC 10.20.0.0/16 contiene cuatro subredes en dos zonas. Las dos públicas alojan el balanceador y las seis tareas de ECS, que Fargate reparte entre ambas; las privadas alojan PostgreSQL sin ruta a internet. Una franja de color en el borde izquierdo de cada caja indica a qué grupo de seguridad pertenece. Fuera de la VPC, los servicios regionales: ECR, Parameter Store, CloudWatch, Cloud Map y S3.">
+        <defs>
+          <marker id="pta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- internet -->
+        <rect x="30" y="16" width="150" height="30" rx="3" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="105" y="36" text-anchor="middle" class="d-caja">Internet</text>
+        <line x1="105" y1="46" x2="105" y2="96" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#pta)"/>
+        <text x="114" y="76" class="d-flecha">HTTPS / HTTP</text>
+
+        <!-- region -->
+        <rect x="14" y="60" width="952" height="524" rx="4" fill="var(--region)" stroke="var(--line)" stroke-dasharray="4 3"/>
+        <text x="28" y="80" class="d-zona">REGIÓN eu-west-1</text>
+
+        <!-- vpc -->
+        <rect x="30" y="92" width="670" height="472" rx="4" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="44" y="112" class="d-titulo">VPC</text>
+        <text x="76" y="112" class="d-cidr">10.20.0.0/16</text>
+
+        <!-- alb -->
+        <rect x="48" y="126" width="634" height="40" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <rect x="49" y="127" width="3" height="38" fill="var(--sg-alb)"/>
+        <text x="64" y="145" class="d-caja">Balanceador de aplicación</text>
+        <text x="64" y="159" class="d-sub">5101 rentals · 5102 pricing · 5103 fleet · 5104 notifications · 5173 frontal</text>
+        <text x="600" y="151" text-anchor="end" class="d-nota">en las dos zonas</text>
+
+        <!-- zonas -->
+        <text x="196" y="194" text-anchor="middle" class="d-zona">ZONA eu-west-1a</text>
+        <text x="524" y="194" text-anchor="middle" class="d-zona">ZONA eu-west-1b</text>
+
+        <!-- publicas: dos cabeceras y una sola banda de tareas -->
+        <rect x="48" y="204" width="296" height="44" rx="3" fill="var(--publica)" stroke="var(--publica-bord)"/>
+        <text x="62" y="223" class="d-titulo">Subred pública</text>
+        <text x="62" y="238" class="d-cidr">10.20.0.0/24 · eu-west-1a</text>
+
+        <rect x="376" y="204" width="296" height="44" rx="3" fill="var(--publica)" stroke="var(--publica-bord)"/>
+        <text x="390" y="223" class="d-titulo">Subred pública</text>
+        <text x="390" y="238" class="d-cidr">10.20.1.0/24 · eu-west-1b</text>
+
+        <rect x="48" y="258" width="624" height="142" rx="3" fill="var(--publica)" stroke="var(--publica-bord)" stroke-dasharray="4 3"/>
+        <text x="62" y="278" class="d-titulo">Tareas de ECS · Fargate</text>
+        <text x="658" y="278" text-anchor="end" class="d-nota">cada tarea cae en una subred u otra, y cambia en cada despliegue</text>
+
+        <rect x="64" y="292" width="272" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="65" y="293" width="3" height="24" fill="var(--sg-serv)"/>
+        <text x="78" y="309" class="d-caja">rentals-api</text>
+        <text x="324" y="309" text-anchor="end" class="d-sub">rentals.testenforce.local</text>
+
+        <rect x="64" y="324" width="272" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="65" y="325" width="3" height="24" fill="var(--sg-serv)"/>
+        <text x="78" y="341" class="d-caja">pricing-api</text>
+        <text x="324" y="341" text-anchor="end" class="d-sub">pricing.testenforce.local</text>
+
+        <rect x="64" y="356" width="272" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="65" y="357" width="3" height="24" fill="var(--sg-serv)"/>
+        <text x="78" y="373" class="d-caja">fleet-api</text>
+        <text x="324" y="373" text-anchor="end" class="d-sub">fleet.testenforce.local</text>
+
+        <rect x="384" y="292" width="272" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="385" y="293" width="3" height="24" fill="var(--sg-serv)"/>
+        <text x="398" y="309" class="d-caja">notifications-api</text>
+        <text x="644" y="309" text-anchor="end" class="d-sub">notifications.testenforce.local</text>
+
+        <rect x="384" y="324" width="272" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="385" y="325" width="3" height="24" fill="var(--sg-serv)"/>
+        <text x="398" y="341" class="d-caja">frontend · nginx</text>
+        <text x="644" y="341" text-anchor="end" class="d-sub">frontend.testenforce.local</text>
+
+        <rect x="384" y="356" width="272" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="385" y="357" width="3" height="24" fill="var(--sg-kafka)"/>
+        <text x="398" y="373" class="d-caja">kafka</text>
+        <text x="644" y="373" text-anchor="end" class="d-sub">kafka.testenforce.local</text>
+
+        <!-- privadas -->
+        <rect x="48" y="418" width="296" height="128" rx="3" fill="var(--privada)" stroke="var(--privada-bord)"/>
+        <text x="62" y="437" class="d-titulo">Subred privada</text>
+        <text x="62" y="452" class="d-cidr">10.20.10.0/24</text>
+
+        <rect x="376" y="418" width="296" height="128" rx="3" fill="var(--privada)" stroke="var(--privada-bord)"/>
+        <text x="390" y="437" class="d-titulo">Subred privada</text>
+        <text x="390" y="452" class="d-cidr">10.20.11.0/24</text>
+
+        <rect x="150" y="470" width="420" height="40" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="151" y="471" width="3" height="38" fill="var(--sg-bd)"/>
+        <text x="166" y="488" class="d-caja">PostgreSQL · RDS</text>
+        <text x="166" y="502" class="d-sub">db.t4g.micro · 20 GB · sin acceso público</text>
+
+        <text x="62" y="534" class="d-nota">Sin ruta a internet. No poder salir es una propiedad de seguridad, no una carencia.</text>
+
+        <!-- flechas verticales dentro de la vpc -->
+        <line x1="360" y1="166" x2="360" y2="254" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#pta)"/>
+        <line x1="360" y1="404" x2="360" y2="468" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#pta)"/>
+        <text x="368" y="442" class="d-flecha">5432</text>
+
+        <!-- servicios regionales -->
+        <rect x="716" y="126" width="234" height="420" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="732" y="148" class="d-titulo">Servicios regionales</text>
+        <text x="732" y="163" class="d-nota">fuera de la VPC</text>
+
+        <rect x="732" y="178" width="202" height="46" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="744" y="196" class="d-caja">ECR</text>
+        <text x="744" y="211" class="d-sub">5 repositorios de imagen</text>
+
+        <rect x="732" y="234" width="202" height="46" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="744" y="252" class="d-caja">Parameter Store</text>
+        <text x="744" y="267" class="d-sub">3 cadenas de conexión</text>
+
+        <rect x="732" y="290" width="202" height="46" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="744" y="308" class="d-caja">CloudWatch Logs</text>
+        <text x="744" y="323" class="d-sub">7 grupos · 7 días</text>
+
+        <rect x="732" y="346" width="202" height="46" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="744" y="364" class="d-caja">Cloud Map</text>
+        <text x="744" y="379" class="d-sub">testenforce.local</text>
+
+        <rect x="732" y="402" width="202" height="60" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="744" y="420" class="d-caja">S3</text>
+        <text x="744" y="435" class="d-sub">estado de Terraform</text>
+        <text x="744" y="449" class="d-sub">frontal (bucket en espera)</text>
+
+        <rect x="732" y="472" width="202" height="46" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="744" y="490" class="d-caja">EventBridge Scheduler</text>
+        <text x="744" y="505" class="d-sub">apaga todo a las 22:00</text>
+
+        <!-- flechas de las tareas a los regionales -->
+        <line x1="682" y1="290" x2="728" y2="290" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#pta)"/>
+        <text x="688" y="283" class="d-flecha">443</text>
+
+        <!-- leyenda de grupos de seguridad -->
+        <text x="30" y="606" class="d-zona">GRUPOS DE SEGURIDAD</text>
+
+        <rect x="30" y="620" width="10" height="10" fill="var(--sg-alb)"/>
+        <text x="48" y="629" class="d-nota">testenforce-alb</text>
+
+        <rect x="220" y="620" width="10" height="10" fill="var(--sg-serv)"/>
+        <text x="238" y="629" class="d-nota">testenforce-servicios</text>
+
+        <rect x="450" y="620" width="10" height="10" fill="var(--sg-kafka)"/>
+        <text x="468" y="629" class="d-nota">testenforce-kafka</text>
+
+        <rect x="650" y="620" width="10" height="10" fill="var(--sg-bd)"/>
+        <text x="668" y="629" class="d-nota">testenforce-bd</text>
+      </svg>
+    </div>
+    <figcaption>Las tareas viven en subredes públicas porque necesitan salida a internet para descargar sus imágenes; lo que las protege no es la subred, es el grupo de seguridad. PostgreSQL sí está en subredes sin ruta de salida. La franja de color del borde izquierdo dice a qué grupo de seguridad pertenece cada caja; el detalle de sus reglas está en la sección siguiente. Las tareas aparecen en una sola banda a propósito: <strong>en qué subred cae cada una lo decide Fargate</strong>, y cambia en cada despliegue. Lo que no cambia es su nombre en el DNS privado, que es además por donde se llaman entre ellas.</figcaption>
+  </figure>
+
+  <div class="nota">
+    <p><strong>Por qué las tareas están en subredes públicas.</strong> Sin NAT Gateway —32 $/mes— una tarea en subred privada no podría descargar su imagen de ECR ni escribir en CloudWatch. Se les da IP pública y se cierra la puerta con grupos de seguridad: ninguno admite entrada desde internet.</p>
+    <p>Es un compromiso consciente del entorno de aprendizaje. En producción irían en privadas, con NAT o con <i>VPC endpoints</i>.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Una puerta por servicio fuera, la misma dentro</h2>
+
+  <p class="narrow">Todas las tareas escuchan en el <strong>8080</strong> y ninguna choca con las demás. No es un descuido: es lo que significa <code>network_mode = "awsvpc"</code>.</p>
+
+  <figure>
+    <div class="lienzo">
+      <svg viewBox="0 0 980 300" role="img" aria-label="El balanceador tiene un escuchador por servicio en los puertos 5101, 5102, 5103, 5104 y 5173. Cada uno reenvía a una tarea distinta, y todas escuchan en el puerto 8080 de su propia dirección IP privada.">
+        <defs>
+          <marker id="pta4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <rect x="24" y="30" width="196" height="222" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="122" y="54" text-anchor="middle" class="d-titulo">Balanceador</text>
+
+        <rect x="40" y="70" width="164" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="122" y="88" text-anchor="middle" class="d-sub">escuchador :5101</text>
+        <rect x="40" y="104" width="164" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="122" y="122" text-anchor="middle" class="d-sub">escuchador :5102</text>
+        <rect x="40" y="138" width="164" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="122" y="156" text-anchor="middle" class="d-sub">escuchador :5103</text>
+        <rect x="40" y="172" width="164" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="122" y="190" text-anchor="middle" class="d-sub">escuchador :5104</text>
+        <rect x="40" y="206" width="164" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="122" y="224" text-anchor="middle" class="d-sub">escuchador :5173</text>
+
+        <line x1="220" y1="83" x2="352" y2="83" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="117" x2="352" y2="117" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="151" x2="352" y2="151" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="185" x2="352" y2="185" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="219" x2="352" y2="219" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta4)"/>
+
+        <text x="286" y="62" text-anchor="middle" class="d-flecha">un grupo de destinos cada uno</text>
+
+        <rect x="356" y="70" width="330" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="368" y="88" class="d-caja">rentals-api</text>
+        <text x="674" y="88" text-anchor="end" class="d-sub">10.20.0.210:8080</text>
+
+        <rect x="356" y="104" width="330" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="368" y="122" class="d-caja">pricing-api</text>
+        <text x="674" y="122" text-anchor="end" class="d-sub">10.20.0.216:8080</text>
+
+        <rect x="356" y="138" width="330" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="368" y="156" class="d-caja">fleet-api</text>
+        <text x="674" y="156" text-anchor="end" class="d-sub">10.20.1.253:8080</text>
+
+        <rect x="356" y="172" width="330" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="368" y="190" class="d-caja">notifications-api</text>
+        <text x="674" y="190" text-anchor="end" class="d-sub">10.20.0.233:8080</text>
+
+        <rect x="356" y="206" width="330" height="26" rx="2" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="368" y="224" class="d-caja">frontend · nginx</text>
+        <text x="674" y="224" text-anchor="end" class="d-sub">10.20.0.130:8080</text>
+
+        <rect x="706" y="70" width="250" height="162" rx="3" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="722" y="92" class="d-titulo">Por qué no chocan</text>
+        <text x="722" y="112" class="d-nota">Cada tarea de Fargate recibe su</text>
+        <text x="722" y="126" class="d-nota">propia interfaz de red, con su propia</text>
+        <text x="722" y="140" class="d-nota">dirección dentro de la VPC.</text>
+        <text x="722" y="162" class="d-nota">Un puerto solo puede chocar con otro</text>
+        <text x="722" y="176" class="d-nota">si comparten máquina. Aquí no la</text>
+        <text x="722" y="190" class="d-nota">comparten: para la red, cada tarea</text>
+        <text x="722" y="204" class="d-nota">es una máquina distinta.</text>
+
+        <text x="24" y="278" class="d-nota">Las direcciones son las de un momento concreto: cambian en cada despliegue. Lo que no cambia es que sean seis distintas y el puerto, uno.</text>
+      </svg>
+    </div>
+    <figcaption>Los números 51xx son puertos <em>del balanceador</em>, no de los servicios. Se separa por puerto porque sin dominio propio no hay enrutado por nombre de host, y además replica la forma del <code>docker-compose</code> local, donde <code>"5102:8080"</code> dice exactamente lo mismo: 5102 fuera, 8080 dentro.</figcaption>
+  </figure>
+
+  <div class="nota">
+    <p><strong>Por qué 8080 y no 80.</strong> Los puertos por debajo de 1024 solo los puede abrir <code>root</code>. Como ningún contenedor del proyecto corre como <code>root</code>, todos escuchan por encima de esa frontera: las imágenes de .NET traen <code>ASPNETCORE_URLS=http://+:8080</code> y el frontal usa la variante <i>unprivileged</i> de nginx, que también escucha en 8080.</p>
+    <p>Que coincidan no es casualidad ni obligación: es una convención del proyecto, y lo que la hace cómoda es precisamente que no cueste nada mantenerla.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Quién puede hablar con quién</h2>
+
+  <p class="narrow">Cuatro grupos de seguridad encadenados. Un grupo de seguridad no es un muro alrededor de una máquina: es una <strong>lista de lo que se permite</strong>, y todo lo que no está en la lista se descarta sin más. No existe una regla de «prohibir»: existe no haber escrito la de permitir.</p>
+
+  <figure>
+    <div class="lienzo">
+      <svg viewBox="0 0 980 310" role="img" aria-label="Los cuatro grupos de seguridad y sus reglas reales. El grupo del balanceador admite entrada desde cualquier dirección en los puertos 5101 a 5104 y 5173, y tiene salida abierta. El de los servicios admite entrada en el 8080 desde el grupo del balanceador y desde sí mismo, con salida abierta. El de Kafka admite el 9092 desde el grupo de servicios. El de la base de datos admite el 5432 desde el grupo de servicios y no tiene ninguna regla de salida.">
+        <defs>
+          <marker id="pta2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="128" width="110" height="40" rx="3" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="75" y="145" text-anchor="middle" class="d-caja">Internet</text>
+        <text x="75" y="159" text-anchor="middle" class="d-sub">0.0.0.0/0</text>
+
+        <line x1="132" y1="148" x2="156" y2="148" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta2)"/>
+
+        <!-- balanceador -->
+        <rect x="160" y="100" width="230" height="96" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="160" y="100" width="230" height="4" fill="var(--sg-alb)"/>
+        <text x="174" y="126" class="d-titulo">testenforce-alb</text>
+        <text x="174" y="148" class="d-sub">&#8592; internet &middot; 5101-5104, 5173</text>
+        <text x="174" y="166" class="d-sub">&#8594; salida &middot; todo</text>
+        <text x="174" y="186" class="d-nota">el único que mira a internet</text>
+
+        <line x1="392" y1="148" x2="416" y2="148" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta2)"/>
+
+        <!-- servicios -->
+        <rect x="420" y="100" width="230" height="96" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="420" y="100" width="230" height="4" fill="var(--sg-serv)"/>
+        <text x="434" y="126" class="d-titulo">testenforce-servicios</text>
+        <text x="434" y="148" class="d-sub">&#8592; grupo del alb &middot; 8080</text>
+        <text x="434" y="166" class="d-sub">&#8592; él mismo &middot; 8080</text>
+        <text x="434" y="184" class="d-sub">&#8594; salida &middot; todo</text>
+
+        <path d="M 470 100 C 470 64, 600 64, 600 100" fill="none" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#pta2)"/>
+        <text x="535" y="58" text-anchor="middle" class="d-flecha">entre ellas</text>
+
+        <line x1="652" y1="130" x2="686" y2="96" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta2)"/>
+        <line x1="652" y1="166" x2="686" y2="200" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta2)"/>
+
+        <!-- kafka -->
+        <rect x="690" y="24" width="270" height="80" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="690" y="24" width="270" height="4" fill="var(--sg-kafka)"/>
+        <text x="704" y="50" class="d-titulo">testenforce-kafka</text>
+        <text x="704" y="72" class="d-sub">&#8592; grupo de servicios &middot; 9092</text>
+        <text x="704" y="90" class="d-sub">&#8594; salida &middot; todo</text>
+
+        <!-- base de datos -->
+        <rect x="690" y="192" width="270" height="80" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="690" y="192" width="270" height="4" fill="var(--sg-bd)"/>
+        <text x="704" y="218" class="d-titulo">testenforce-bd</text>
+        <text x="704" y="240" class="d-sub">&#8592; grupo de servicios &middot; 5432</text>
+        <text x="704" y="258" class="d-sub" fill="var(--parado)">&#8594; ninguna regla de salida</text>
+
+        <text x="20" y="296" class="d-nota">Ni un solo «0.0.0.0/0» de entrada después del balanceador: las tres flechas de la derecha nombran grupos, no direcciones.</text>
+      </svg>
+    </div>
+    <figcaption>Las reglas son las que hay en la cuenta, leídas con <code>describe-security-group-rules</code>. La flecha que sale de <em>servicios</em> y vuelve a <em>servicios</em> es el grupo referenciándose a sí mismo: así se dice «las de dentro se hablan entre ellas» sin enumerar direcciones que cambian en cada despliegue.</figcaption>
+  </figure>
+
+  <h3>Las reglas, una por una</h3>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr><th>Grupo</th><th>Sentido</th><th>Puerto</th><th>Origen o destino</th><th>Para qué</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>testenforce-alb</td><td>Entrada</td><td class="mono">5101 · 5102 · 5103 · 5104 · 5173</td><td class="mono">0.0.0.0/0</td><td>La única puerta abierta a internet, una por servicio</td></tr>
+        <tr><td>testenforce-alb</td><td>Salida</td><td class="mono">todo</td><td class="mono">0.0.0.0/0</td><td>Alcanzar a las tareas, estén donde estén</td></tr>
+        <tr><td>testenforce-servicios</td><td>Entrada</td><td class="mono">8080</td><td class="mono">grupo testenforce-alb</td><td>Solo el balanceador entra. Internet, nunca</td></tr>
+        <tr><td>testenforce-servicios</td><td>Entrada</td><td class="mono">8080</td><td class="mono">él mismo</td><td>Rentals llama a Fleet y a Pricing por el DNS privado</td></tr>
+        <tr><td>testenforce-servicios</td><td>Salida</td><td class="mono">todo</td><td class="mono">0.0.0.0/0</td><td>Descargar imágenes de ECR, resolver DNS, escribir logs</td></tr>
+        <tr><td>testenforce-kafka</td><td>Entrada</td><td class="mono">9092</td><td class="mono">grupo testenforce-servicios</td><td>Publicar y consumir. Nadie más lo alcanza</td></tr>
+        <tr><td>testenforce-kafka</td><td>Salida</td><td class="mono">todo</td><td class="mono">0.0.0.0/0</td><td>Descargar su imagen y escribir logs</td></tr>
+        <tr><td>testenforce-bd</td><td>Entrada</td><td class="mono">5432</td><td class="mono">grupo testenforce-servicios</td><td>PostgreSQL, solo desde las tareas</td></tr>
+        <tr><td>testenforce-bd</td><td>Salida</td><td class="mono">—</td><td class="mono">—</td><td>No hay ninguna: la base de datos no puede iniciar nada</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota">
+    <p><strong>¿Y cómo contesta entonces la base de datos, si no tiene salida?</strong> Porque los grupos de seguridad tienen memoria. Cuando aceptan una conexión de entrada, la respuesta a esa misma conexión vuelve permitida, sin necesidad de ninguna regla de salida.</p>
+    <p>Así que «sin salida» no significa muda: significa que puede <em>responder</em> a quien le habla, pero no puede <em>llamar</em> a nadie por su cuenta. Si alguien lograse ejecutar algo dentro de esa máquina, no tendría por dónde sacar lo que encuentre.</p>
+  </div>
+
+  <div class="nota">
+    <p><strong>Por qué se nombran grupos y no direcciones.</strong> Una tarea de Fargate estrena IP cada vez que se despliega. Una regla escrita contra <code>10.20.1.49</code> caduca en el siguiente despliegue, y la tentación entonces es ampliarla a toda la subred — que es exactamente cómo una red acaba abierta por dentro.</p>
+    <p>La pertenencia a un grupo, en cambio, sobrevive: la tarea nueva nace ya dentro de él. La regla se escribe una vez y sigue siendo cierta.</p>
+  </div>
+</section>
+
+<section>
+  <h2>El recorrido de una petición</h2>
+
+  <p class="narrow">Crear y confirmar una renta toca casi todo el sistema. Este es el camino real, el mismo que se puede seguir en CloudWatch filtrando por un identificador de correlación.</p>
+
+  <figure>
+    <div class="lienzo">
+      <svg viewBox="0 0 980 330" role="img" aria-label="Una petición entra por el balanceador a rentals-api, que consulta fleet-api y pricing-api por el DNS privado, guarda en PostgreSQL y publica en Kafka. Desde Kafka, fleet-api y notifications-api consumen el mismo evento con grupos de consumo distintos.">
+        <defs>
+          <marker id="pta3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="130" width="112" height="46" rx="3" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="76" y="149" text-anchor="middle" class="d-caja">Navegador</text>
+        <text x="76" y="164" text-anchor="middle" class="d-sub">o Postman</text>
+
+        <line x1="132" y1="153" x2="196" y2="153" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="164" y="145" text-anchor="middle" class="d-flecha">:5101</text>
+
+        <rect x="200" y="122" width="140" height="62" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="270" y="146" text-anchor="middle" class="d-caja">rentals-api</text>
+        <text x="270" y="162" text-anchor="middle" class="d-sub">crea la renta</text>
+        <text x="270" y="176" text-anchor="middle" class="d-sub">y la confirma</text>
+
+        <!-- consultas sincronas -->
+        <line x1="340" y1="136" x2="428" y2="74" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#pta3)"/>
+        <text x="356" y="96" class="d-flecha">fleet.testenforce.local</text>
+
+        <line x1="340" y1="152" x2="428" y2="132" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#pta3)"/>
+        <text x="356" y="130" class="d-flecha">pricing.testenforce.local</text>
+
+        <rect x="432" y="50" width="150" height="44" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="507" y="68" text-anchor="middle" class="d-caja">fleet-api</text>
+        <text x="507" y="83" text-anchor="middle" class="d-sub">¿existe el vehículo?</text>
+
+        <rect x="432" y="110" width="150" height="44" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="507" y="128" text-anchor="middle" class="d-caja">pricing-api</text>
+        <text x="507" y="143" text-anchor="middle" class="d-sub">¿cuánto cuesta?</text>
+
+        <!-- persistencia -->
+        <line x1="270" y1="184" x2="270" y2="248" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#pta3)"/>
+        <text x="278" y="222" class="d-flecha">guarda</text>
+
+        <rect x="196" y="252" width="150" height="44" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="271" y="270" text-anchor="middle" class="d-caja">PostgreSQL</text>
+        <text x="271" y="285" text-anchor="middle" class="d-sub">esquema rentals</text>
+
+        <!-- kafka -->
+        <line x1="340" y1="168" x2="602" y2="196" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="430" y="190" class="d-flecha">publica rental.confirmed</text>
+
+        <rect x="606" y="172" width="150" height="50" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="681" y="193" text-anchor="middle" class="d-caja">Kafka</text>
+        <text x="681" y="208" text-anchor="middle" class="d-sub">topic rental-events</text>
+
+        <!-- fan out -->
+        <line x1="756" y1="186" x2="832" y2="110" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="748" y="136" class="d-flecha">fleet-service</text>
+
+        <line x1="756" y1="208" x2="832" y2="266" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="748" y="254" class="d-flecha">notifications-service</text>
+
+        <rect x="836" y="72" width="126" height="52" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="899" y="93" text-anchor="middle" class="d-caja">fleet-api</text>
+        <text x="899" y="109" text-anchor="middle" class="d-sub">bloquea el coche</text>
+
+        <rect x="836" y="240" width="126" height="52" rx="3" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="899" y="261" text-anchor="middle" class="d-caja">notifications-api</text>
+        <text x="899" y="277" text-anchor="middle" class="d-sub">guarda el aviso</text>
+
+        <text x="606" y="250" class="d-nota">Dos grupos de consumo distintos sobre el</text>
+        <text x="606" y="264" class="d-nota">mismo topic: cada uno lleva su propio</text>
+        <text x="606" y="278" class="d-nota">marcador y ambos reciben todo.</text>
+
+        <text x="20" y="318" class="d-nota">El identificador de correlación entra en la cabecera X-Correlation-Id, viaja en el Activity, cruza Kafka como cabecera del mensaje y aparece en los logs de los tres servicios.</text>
+      </svg>
+    </div>
+    <figcaption>Las dos consultas de la izquierda son síncronas y van por el DNS privado, sin salir a internet. La publicación es asíncrona: Rentals no espera a que nadie la consuma, y por eso añadir un consumidor no exige tocar Rentals.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>El frontal, y el interruptor que lo mueve</h2>
+
+  <p class="narrow">Es la unica pieza del sistema que tiene dos formas posibles. CloudFront esta bloqueado hasta que AWS verifique la cuenta, asi que se sirve con nginx &mdash; pero el codigo de los dos caminos convive detras de una variable.</p>
+
+  <figure>
+    <div class="lienzo">
+      <svg viewBox="0 0 980 330" role="img" aria-label="Dos modos para el frontal. En modo nginx el navegador entra por el balanceador en el puerto 5173 a una tarea de nginx en ECS, que reparte las rutas de API a los servicios por el DNS privado. En modo cloudfront el navegador entra por CloudFront, que sirve los ficheros desde S3 y reenvia las rutas de API al balanceador.">
+        <defs>
+          <marker id="pta5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+          </marker>
+          <marker id="pta5g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="40" width="460" height="270" rx="4" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="36" y="64" class="d-titulo">frontal = "nginx"</text>
+        <text x="464" y="64" text-anchor="end" class="d-flecha">ACTIVO</text>
+
+        <rect x="110" y="82" width="280" height="30" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="250" y="102" text-anchor="middle" class="d-caja">Navegador</text>
+
+        <line x1="250" y1="112" x2="250" y2="136" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta5)"/>
+        <text x="258" y="130" class="d-flecha">:5173</text>
+
+        <rect x="110" y="140" width="280" height="30" rx="2" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="250" y="160" text-anchor="middle" class="d-caja">Balanceador</text>
+
+        <line x1="250" y1="170" x2="250" y2="194" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta5)"/>
+        <text x="258" y="188" class="d-flecha">:8080</text>
+
+        <rect x="110" y="198" width="280" height="30" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="250" y="218" text-anchor="middle" class="d-caja">tarea nginx en ECS</text>
+
+        <line x1="250" y1="228" x2="250" y2="252" stroke="var(--accent)" stroke-width="1.3" marker-end="url(#pta5)"/>
+        <text x="258" y="246" class="d-flecha">/api/* por el DNS privado</text>
+
+        <rect x="110" y="256" width="280" height="30" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="250" y="276" text-anchor="middle" class="d-sub">rentals &middot; fleet &middot; pricing &middot; notifications</text>
+
+        <text x="36" y="302" class="d-nota">Una tarea mas que mantener viva: ~9 $/mes, y se apaga por la noche con las demas.</text>
+
+        <rect x="500" y="40" width="460" height="270" rx="4" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <text x="516" y="64" class="d-titulo">frontal = "cloudfront"</text>
+        <text x="944" y="64" text-anchor="end" class="d-nota">A LA ESPERA</text>
+
+        <rect x="590" y="82" width="280" height="30" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="730" y="102" text-anchor="middle" class="d-caja">Navegador</text>
+
+        <line x1="730" y1="112" x2="730" y2="136" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pta5g)"/>
+        <text x="738" y="130" class="d-nota">HTTPS</text>
+
+        <rect x="590" y="140" width="280" height="30" rx="2" fill="var(--surface-alt)" stroke="var(--muted)" stroke-dasharray="3 3"/>
+        <text x="730" y="160" text-anchor="middle" class="d-caja">CloudFront</text>
+
+        <line x1="690" y1="170" x2="621" y2="210" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pta5g)"/>
+        <text x="590" y="196" class="d-nota">ficheros</text>
+
+        <line x1="770" y1="170" x2="839" y2="210" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#pta5g)"/>
+        <text x="816" y="196" class="d-nota">/api/*</text>
+
+        <rect x="516" y="214" width="180" height="30" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="606" y="234" text-anchor="middle" class="d-caja">S3</text>
+
+        <rect x="764" y="214" width="180" height="30" rx="2" fill="var(--surface-alt)" stroke="var(--line)"/>
+        <text x="854" y="234" text-anchor="middle" class="d-caja">Balanceador</text>
+
+        <text x="516" y="272" class="d-nota">Sin nada que apagar y con capa gratuita permanente. Solo faltan dos</text>
+        <text x="516" y="286" class="d-nota">recursos por crear: la distribucion y la politica del bucket. El bucket,</text>
+        <text x="516" y="300" class="d-nota">el control de acceso y las rutas ya existen en los dos modos.</text>
+      </svg>
+    </div>
+    <figcaption>Lo que cambia entre los dos modos es qui&eacute;n recibe la petici&oacute;n y qui&eacute;n sirve los ficheros; los servicios no se enteran. Cambiar de uno a otro es cambiar la variable de repositorio <code>FRONTAL</code>: Terraform crea lo que falta y destruye lo que sobra.</figcaption>
+  </figure>
+
+  <div class="nota">
+    <p><strong>La misma imagen en los dos sitios.</strong> El nginx que corre en local y el que correr&aacute; en AWS son el mismo contenedor. Lo que cambia son variables de entorno: en <code>compose</code> los vecinos se llaman <code>rentals-api</code> y el DNS es el de Docker; en Fargate se llaman <code>rentals.testenforce.local</code> y el DNS es el de la VPC.</p>
+    <p>Por eso su configuraci&oacute;n es una plantilla y no un fichero fijo. Una configuraci&oacute;n que solo vale en un sitio es una configuraci&oacute;n que se descubre rota en el otro.</p>
+  </div>
+</section>
+
+<section>
+  <h2>El inventario</h2>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr><th>Recurso</th><th>Qué es</th><th>Detalle</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>VPC</td><td>La red privada</td><td class="mono">10.20.0.0/16</td><td><span class="pastilla vivo">Activa</span></td></tr>
+        <tr><td>Subredes públicas</td><td>Donde viven las tareas</td><td class="mono">10.20.0.0/24 · 10.20.1.0/24</td><td><span class="pastilla vivo">Activas</span></td></tr>
+        <tr><td>Subredes privadas</td><td>Donde vive la base de datos</td><td class="mono">10.20.10.0/24 · 10.20.11.0/24</td><td><span class="pastilla vivo">Activas</span></td></tr>
+        <tr><td>Balanceador</td><td>La entrada pública</td><td class="mono">5 escuchadores, 5101-5104 y 5173</td><td><span class="pastilla vivo">Activo</span></td></tr>
+        <tr><td>Clúster ECS</td><td>Donde corren los contenedores</td><td class="mono">Fargate · 6 servicios</td><td><span class="pastilla vivo">6 / 6 tareas</span></td></tr>
+        <tr><td>Frontal · nginx</td><td>La aplicación web</td><td class="mono">1 / 1 tarea · escuchador 5173</td><td><span class="pastilla vivo">Sirviendo</span></td></tr>
+        <tr><td>RDS</td><td>PostgreSQL compartido</td><td class="mono">db.t4g.micro · 20 GB · 1 zona</td><td><span class="pastilla vivo">Disponible</span></td></tr>
+        <tr><td>ECR</td><td>Registro de imágenes</td><td class="mono">5 repositorios, 10 versiones cada uno</td><td><span class="pastilla vivo">Activo</span></td></tr>
+        <tr><td>Cloud Map</td><td>DNS privado interno</td><td class="mono">testenforce.local · 6 nombres</td><td><span class="pastilla vivo">Activo</span></td></tr>
+        <tr><td>Parameter Store</td><td>Cadenas de conexión cifradas</td><td class="mono">3 parámetros SecureString</td><td><span class="pastilla vivo">Activo</span></td></tr>
+        <tr><td>CloudWatch Logs</td><td>Los logs de todo</td><td class="mono">7 grupos · retención 7 días</td><td><span class="pastilla vivo">Activo</span></td></tr>
+        <tr><td>S3</td><td>Estado de Terraform y frontal</td><td class="mono">2 buckets</td><td><span class="pastilla vivo">Activos</span></td></tr>
+        <tr><td>EventBridge Scheduler</td><td>El apagado nocturno</td><td class="mono">7 citas · 22:00 Europe/Madrid</td><td><span class="pastilla vivo">Armado</span></td></tr>
+        <tr><td>CloudFront</td><td>El otro modo del frontal</td><td class="mono">2 recursos a una variable de distancia</td><td><span class="pastilla parado">Bloqueado por AWS</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota">
+    <p><strong>Lo que costó poner en verde esta última fila.</strong> El frontal tardó tres despliegues fallidos, y cada uno destapó el siguiente: una configuración de nginx atada al DNS de Docker; un bucle que construía el frontal como si fuera un proyecto .NET; y un <code>ignore_changes</code> en la definición de tarea que hacía que las variables escritas en Terraform no llegaran nunca a AWS.</p>
+    <p>Los tres fallos tenían la misma forma: <strong>algo que era cierto en local dejaba de serlo en AWS, y nada lo comprobaba</strong>. Lo que acabó destapando el primero no fue una sonda ni un plan en verde: fueron las pruebas de humo, en cuanto se les permitió mirar el frontal.</p>
+  </div>
+
+  <h3>Lo que no hay, y es deliberado</h3>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr><th>Ausente</th><th>Por qué</th><th>Ahorro</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>NAT Gateway</td><td>Tareas en subredes públicas con grupos cerrados</td><td class="mono">32 $/mes</td></tr>
+        <tr><td>MSK</td><td>Kafka corre como una tarea más de ECS</td><td class="mono">110-530 $/mes</td></tr>
+        <tr><td>Route 53 y ACM</td><td>Sin dominio propio; se usa el DNS del balanceador</td><td class="mono">~13 $/año</td></tr>
+        <tr><td>Multi-AZ en RDS</td><td>La alta disponibilidad duplica el precio</td><td class="mono">~13 $/mes</td></tr>
+        <tr><td>EFS para Kafka</td><td>Disco efímero: Kafka es transporte, no almacén</td><td class="mono">~3 $/mes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota">
+    <p><strong>Coste encendido:</strong> unos 0,08 $/hora entre las seis tareas, el balanceador y la base de datos. <strong>Apagado:</strong> quedan el balanceador (~16 $/mes, no admite apagarse) y el disco de RDS (~2 $/mes).</p>
+    <p>Para llegar a cero hace falta destruir, que es el nivel 2 del interruptor.</p>
+  </div>
+</section>
+
+<footer>
+  Inventario, direcciones IP y estado de los servicios tomados de la cuenta 037169690600 el 12 de septiembre de 2026, consultando la API de AWS. Las IP cambian en cada despliegue. Los precios son órdenes de magnitud para eu-west-1, no facturas.
+</footer>
+
+</div>

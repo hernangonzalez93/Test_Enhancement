@@ -1,0 +1,76 @@
+<svg viewBox="0 0 980 330" role="img" aria-label="Dos modos para el frontal. En modo nginx el navegador entra por el balanceador en el puerto 5173 a una tarea de nginx en ECS, que reparte las rutas de API a los servicios por el DNS privado. En modo cloudfront el navegador entra por CloudFront, que sirve los ficheros desde S3 y reenvia las rutas de API al balanceador." xmlns="http://www.w3.org/2000/svg" width="980" height="330">
+  <style>
+    .d-titulo { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; fill: #12171F; }
+    .d-zona   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #5B6573; letter-spacing: 0.06em; }
+    .d-cidr   { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 10px; fill: #5B6573; }
+    .d-caja   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #12171F; }
+    .d-sub    { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 9.5px; fill: #5B6573; }
+    .d-flecha { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #0F5E6B; font-weight: 500; }
+    .d-nota   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #5B6573; }
+  </style>
+  <rect width="980" height="330" fill="#FFFFFF"/>
+        <defs>
+          <marker id="pta5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0F5E6B"/>
+          </marker>
+          <marker id="pta5g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#5B6573"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="40" width="460" height="270" rx="4" fill="#FFFFFF" stroke="#0F5E6B" stroke-width="1.5"/>
+        <text x="36" y="64" class="d-titulo">frontal = "nginx"</text>
+        <text x="464" y="64" text-anchor="end" class="d-flecha">ACTIVO</text>
+
+        <rect x="110" y="82" width="280" height="30" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="250" y="102" text-anchor="middle" class="d-caja">Navegador</text>
+
+        <line x1="250" y1="112" x2="250" y2="136" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta5)"/>
+        <text x="258" y="130" class="d-flecha">:5173</text>
+
+        <rect x="110" y="140" width="280" height="30" rx="2" fill="#E2F0F1" stroke="#0F5E6B"/>
+        <text x="250" y="160" text-anchor="middle" class="d-caja">Balanceador</text>
+
+        <line x1="250" y1="170" x2="250" y2="194" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta5)"/>
+        <text x="258" y="188" class="d-flecha">:8080</text>
+
+        <rect x="110" y="198" width="280" height="30" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="250" y="218" text-anchor="middle" class="d-caja">tarea nginx en ECS</text>
+
+        <line x1="250" y1="228" x2="250" y2="252" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta5)"/>
+        <text x="258" y="246" class="d-flecha">/api/* por el DNS privado</text>
+
+        <rect x="110" y="256" width="280" height="30" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="250" y="276" text-anchor="middle" class="d-sub">rentals · fleet · pricing · notifications</text>
+
+        <text x="36" y="302" class="d-nota">Una tarea mas que mantener viva: ~9 $/mes, y se apaga por la noche con las demas.</text>
+
+        <rect x="500" y="40" width="460" height="270" rx="4" fill="#FFFFFF" stroke="#5B6573" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <text x="516" y="64" class="d-titulo">frontal = "cloudfront"</text>
+        <text x="944" y="64" text-anchor="end" class="d-nota">A LA ESPERA</text>
+
+        <rect x="590" y="82" width="280" height="30" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="730" y="102" text-anchor="middle" class="d-caja">Navegador</text>
+
+        <line x1="730" y1="112" x2="730" y2="136" stroke="#5B6573" stroke-width="1.3" marker-end="url(#pta5g)"/>
+        <text x="738" y="130" class="d-nota">HTTPS</text>
+
+        <rect x="590" y="140" width="280" height="30" rx="2" fill="#EDEFF3" stroke="#5B6573" stroke-dasharray="3 3"/>
+        <text x="730" y="160" text-anchor="middle" class="d-caja">CloudFront</text>
+
+        <line x1="690" y1="170" x2="621" y2="210" stroke="#5B6573" stroke-width="1.3" marker-end="url(#pta5g)"/>
+        <text x="590" y="196" class="d-nota">ficheros</text>
+
+        <line x1="770" y1="170" x2="839" y2="210" stroke="#5B6573" stroke-width="1.3" marker-end="url(#pta5g)"/>
+        <text x="816" y="196" class="d-nota">/api/*</text>
+
+        <rect x="516" y="214" width="180" height="30" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="606" y="234" text-anchor="middle" class="d-caja">S3</text>
+
+        <rect x="764" y="214" width="180" height="30" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="854" y="234" text-anchor="middle" class="d-caja">Balanceador</text>
+
+        <text x="516" y="272" class="d-nota">Sin nada que apagar y con capa gratuita permanente. Solo faltan dos</text>
+        <text x="516" y="286" class="d-nota">recursos por crear: la distribucion y la politica del bucket. El bucket,</text>
+        <text x="516" y="300" class="d-nota">el control de acceso y las rutas ya existen en los dos modos.</text>
+      </svg>

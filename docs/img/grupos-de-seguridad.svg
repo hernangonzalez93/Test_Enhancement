@@ -1,0 +1,63 @@
+<svg viewBox="0 0 980 310" role="img" aria-label="Los cuatro grupos de seguridad y sus reglas reales. El grupo del balanceador admite entrada desde cualquier dirección en los puertos 5101 a 5104 y 5173, y tiene salida abierta. El de los servicios admite entrada en el 8080 desde el grupo del balanceador y desde sí mismo, con salida abierta. El de Kafka admite el 9092 desde el grupo de servicios. El de la base de datos admite el 5432 desde el grupo de servicios y no tiene ninguna regla de salida." xmlns="http://www.w3.org/2000/svg" width="980" height="310">
+  <style>
+    .d-titulo { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; fill: #12171F; }
+    .d-zona   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #5B6573; letter-spacing: 0.06em; }
+    .d-cidr   { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 10px; fill: #5B6573; }
+    .d-caja   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #12171F; }
+    .d-sub    { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 9.5px; fill: #5B6573; }
+    .d-flecha { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #0F5E6B; font-weight: 500; }
+    .d-nota   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #5B6573; }
+  </style>
+  <rect width="980" height="310" fill="#FFFFFF"/>
+        <defs>
+          <marker id="pta2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0F5E6B"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="128" width="110" height="40" rx="3" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="75" y="145" text-anchor="middle" class="d-caja">Internet</text>
+        <text x="75" y="159" text-anchor="middle" class="d-sub">0.0.0.0/0</text>
+
+        <line x1="132" y1="148" x2="156" y2="148" stroke="#0F5E6B" stroke-width="1.4" marker-end="url(#pta2)"/>
+
+        <!-- balanceador -->
+        <rect x="160" y="100" width="230" height="96" rx="3" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="160" y="100" width="230" height="4" fill="#0B6E7F"/>
+        <text x="174" y="126" class="d-titulo">testenforce-alb</text>
+        <text x="174" y="148" class="d-sub">&#8592; internet · 5101-5104, 5173</text>
+        <text x="174" y="166" class="d-sub">&#8594; salida · todo</text>
+        <text x="174" y="186" class="d-nota">el único que mira a internet</text>
+
+        <line x1="392" y1="148" x2="416" y2="148" stroke="#0F5E6B" stroke-width="1.4" marker-end="url(#pta2)"/>
+
+        <!-- servicios -->
+        <rect x="420" y="100" width="230" height="96" rx="3" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="420" y="100" width="230" height="4" fill="#3A5CA8"/>
+        <text x="434" y="126" class="d-titulo">testenforce-servicios</text>
+        <text x="434" y="148" class="d-sub">&#8592; grupo del alb · 8080</text>
+        <text x="434" y="166" class="d-sub">&#8592; él mismo · 8080</text>
+        <text x="434" y="184" class="d-sub">&#8594; salida · todo</text>
+
+        <path d="M 470 100 C 470 64, 600 64, 600 100" fill="none" stroke="#0F5E6B" stroke-width="1.2" marker-end="url(#pta2)"/>
+        <text x="535" y="58" text-anchor="middle" class="d-flecha">entre ellas</text>
+
+        <line x1="652" y1="130" x2="686" y2="96" stroke="#0F5E6B" stroke-width="1.4" marker-end="url(#pta2)"/>
+        <line x1="652" y1="166" x2="686" y2="200" stroke="#0F5E6B" stroke-width="1.4" marker-end="url(#pta2)"/>
+
+        <!-- kafka -->
+        <rect x="690" y="24" width="270" height="80" rx="3" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="690" y="24" width="270" height="4" fill="#7B4B9E"/>
+        <text x="704" y="50" class="d-titulo">testenforce-kafka</text>
+        <text x="704" y="72" class="d-sub">&#8592; grupo de servicios · 9092</text>
+        <text x="704" y="90" class="d-sub">&#8594; salida · todo</text>
+
+        <!-- base de datos -->
+        <rect x="690" y="192" width="270" height="80" rx="3" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="690" y="192" width="270" height="4" fill="#2C6E49"/>
+        <text x="704" y="218" class="d-titulo">testenforce-bd</text>
+        <text x="704" y="240" class="d-sub">&#8592; grupo de servicios · 5432</text>
+        <text x="704" y="258" class="d-sub" fill="#B45309">&#8594; ninguna regla de salida</text>
+
+        <text x="20" y="296" class="d-nota">Ni un solo «0.0.0.0/0» de entrada después del balanceador: las tres flechas de la derecha nombran grupos, no direcciones.</text>
+      </svg>

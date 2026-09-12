@@ -1,0 +1,156 @@
+<svg viewBox="0 0 980 640" role="img" aria-label="La VPC 10.20.0.0/16 contiene cuatro subredes en dos zonas. Las dos públicas alojan el balanceador y las seis tareas de ECS, que Fargate reparte entre ambas; las privadas alojan PostgreSQL sin ruta a internet. Una franja de color en el borde izquierdo de cada caja indica a qué grupo de seguridad pertenece. Fuera de la VPC, los servicios regionales: ECR, Parameter Store, CloudWatch, Cloud Map y S3." xmlns="http://www.w3.org/2000/svg" width="980" height="640">
+  <style>
+    .d-titulo { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; fill: #12171F; }
+    .d-zona   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #5B6573; letter-spacing: 0.06em; }
+    .d-cidr   { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 10px; fill: #5B6573; }
+    .d-caja   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #12171F; }
+    .d-sub    { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 9.5px; fill: #5B6573; }
+    .d-flecha { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #0F5E6B; font-weight: 500; }
+    .d-nota   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #5B6573; }
+  </style>
+  <rect width="980" height="640" fill="#FFFFFF"/>
+        <defs>
+          <marker id="pta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0F5E6B"/>
+          </marker>
+        </defs>
+
+        <!-- internet -->
+        <rect x="30" y="16" width="150" height="30" rx="3" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="105" y="36" text-anchor="middle" class="d-caja">Internet</text>
+        <line x1="105" y1="46" x2="105" y2="96" stroke="#0F5E6B" stroke-width="1.5" marker-end="url(#pta)"/>
+        <text x="114" y="76" class="d-flecha">HTTPS / HTTP</text>
+
+        <!-- region -->
+        <rect x="14" y="60" width="952" height="524" rx="4" fill="#FBFCFD" stroke="#D9DEE5" stroke-dasharray="4 3"/>
+        <text x="28" y="80" class="d-zona">REGIÓN eu-west-1</text>
+
+        <!-- vpc -->
+        <rect x="30" y="92" width="670" height="472" rx="4" fill="none" stroke="#0F5E6B" stroke-width="1.5"/>
+        <text x="44" y="112" class="d-titulo">VPC</text>
+        <text x="76" y="112" class="d-cidr">10.20.0.0/16</text>
+
+        <!-- alb -->
+        <rect x="48" y="126" width="634" height="40" rx="3" fill="#E2F0F1" stroke="#0F5E6B"/>
+        <rect x="49" y="127" width="3" height="38" fill="#0B6E7F"/>
+        <text x="64" y="145" class="d-caja">Balanceador de aplicación</text>
+        <text x="64" y="159" class="d-sub">5101 rentals · 5102 pricing · 5103 fleet · 5104 notifications · 5173 frontal</text>
+        <text x="600" y="151" text-anchor="end" class="d-nota">en las dos zonas</text>
+
+        <!-- zonas -->
+        <text x="196" y="194" text-anchor="middle" class="d-zona">ZONA eu-west-1a</text>
+        <text x="524" y="194" text-anchor="middle" class="d-zona">ZONA eu-west-1b</text>
+
+        <!-- publicas: dos cabeceras y una sola banda de tareas -->
+        <rect x="48" y="204" width="296" height="44" rx="3" fill="#E6F1F2" stroke="#7FB2BA"/>
+        <text x="62" y="223" class="d-titulo">Subred pública</text>
+        <text x="62" y="238" class="d-cidr">10.20.0.0/24 · eu-west-1a</text>
+
+        <rect x="376" y="204" width="296" height="44" rx="3" fill="#E6F1F2" stroke="#7FB2BA"/>
+        <text x="390" y="223" class="d-titulo">Subred pública</text>
+        <text x="390" y="238" class="d-cidr">10.20.1.0/24 · eu-west-1b</text>
+
+        <rect x="48" y="258" width="624" height="142" rx="3" fill="#E6F1F2" stroke="#7FB2BA" stroke-dasharray="4 3"/>
+        <text x="62" y="278" class="d-titulo">Tareas de ECS · Fargate</text>
+        <text x="658" y="278" text-anchor="end" class="d-nota">cada tarea cae en una subred u otra, y cambia en cada despliegue</text>
+
+        <rect x="64" y="292" width="272" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="65" y="293" width="3" height="24" fill="#3A5CA8"/>
+        <text x="78" y="309" class="d-caja">rentals-api</text>
+        <text x="324" y="309" text-anchor="end" class="d-sub">rentals.testenforce.local</text>
+
+        <rect x="64" y="324" width="272" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="65" y="325" width="3" height="24" fill="#3A5CA8"/>
+        <text x="78" y="341" class="d-caja">pricing-api</text>
+        <text x="324" y="341" text-anchor="end" class="d-sub">pricing.testenforce.local</text>
+
+        <rect x="64" y="356" width="272" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="65" y="357" width="3" height="24" fill="#3A5CA8"/>
+        <text x="78" y="373" class="d-caja">fleet-api</text>
+        <text x="324" y="373" text-anchor="end" class="d-sub">fleet.testenforce.local</text>
+
+        <rect x="384" y="292" width="272" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="385" y="293" width="3" height="24" fill="#3A5CA8"/>
+        <text x="398" y="309" class="d-caja">notifications-api</text>
+        <text x="644" y="309" text-anchor="end" class="d-sub">notifications.testenforce.local</text>
+
+        <rect x="384" y="324" width="272" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="385" y="325" width="3" height="24" fill="#3A5CA8"/>
+        <text x="398" y="341" class="d-caja">frontend · nginx</text>
+        <text x="644" y="341" text-anchor="end" class="d-sub">frontend.testenforce.local</text>
+
+        <rect x="384" y="356" width="272" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="385" y="357" width="3" height="24" fill="#7B4B9E"/>
+        <text x="398" y="373" class="d-caja">kafka</text>
+        <text x="644" y="373" text-anchor="end" class="d-sub">kafka.testenforce.local</text>
+
+        <!-- privadas -->
+        <rect x="48" y="418" width="296" height="128" rx="3" fill="#E7EAF0" stroke="#8B9CB8"/>
+        <text x="62" y="437" class="d-titulo">Subred privada</text>
+        <text x="62" y="452" class="d-cidr">10.20.10.0/24</text>
+
+        <rect x="376" y="418" width="296" height="128" rx="3" fill="#E7EAF0" stroke="#8B9CB8"/>
+        <text x="390" y="437" class="d-titulo">Subred privada</text>
+        <text x="390" y="452" class="d-cidr">10.20.11.0/24</text>
+
+        <rect x="150" y="470" width="420" height="40" rx="3" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <rect x="151" y="471" width="3" height="38" fill="#2C6E49"/>
+        <text x="166" y="488" class="d-caja">PostgreSQL · RDS</text>
+        <text x="166" y="502" class="d-sub">db.t4g.micro · 20 GB · sin acceso público</text>
+
+        <text x="62" y="534" class="d-nota">Sin ruta a internet. No poder salir es una propiedad de seguridad, no una carencia.</text>
+
+        <!-- flechas verticales dentro de la vpc -->
+        <line x1="360" y1="166" x2="360" y2="254" stroke="#0F5E6B" stroke-width="1.2" marker-end="url(#pta)"/>
+        <line x1="360" y1="404" x2="360" y2="468" stroke="#0F5E6B" stroke-width="1.2" marker-end="url(#pta)"/>
+        <text x="368" y="442" class="d-flecha">5432</text>
+
+        <!-- servicios regionales -->
+        <rect x="716" y="126" width="234" height="420" rx="3" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="732" y="148" class="d-titulo">Servicios regionales</text>
+        <text x="732" y="163" class="d-nota">fuera de la VPC</text>
+
+        <rect x="732" y="178" width="202" height="46" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="744" y="196" class="d-caja">ECR</text>
+        <text x="744" y="211" class="d-sub">5 repositorios de imagen</text>
+
+        <rect x="732" y="234" width="202" height="46" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="744" y="252" class="d-caja">Parameter Store</text>
+        <text x="744" y="267" class="d-sub">3 cadenas de conexión</text>
+
+        <rect x="732" y="290" width="202" height="46" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="744" y="308" class="d-caja">CloudWatch Logs</text>
+        <text x="744" y="323" class="d-sub">7 grupos · 7 días</text>
+
+        <rect x="732" y="346" width="202" height="46" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="744" y="364" class="d-caja">Cloud Map</text>
+        <text x="744" y="379" class="d-sub">testenforce.local</text>
+
+        <rect x="732" y="402" width="202" height="60" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="744" y="420" class="d-caja">S3</text>
+        <text x="744" y="435" class="d-sub">estado de Terraform</text>
+        <text x="744" y="449" class="d-sub">frontal (bucket en espera)</text>
+
+        <rect x="732" y="472" width="202" height="46" rx="2" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="744" y="490" class="d-caja">EventBridge Scheduler</text>
+        <text x="744" y="505" class="d-sub">apaga todo a las 22:00</text>
+
+        <!-- flechas de las tareas a los regionales -->
+        <line x1="682" y1="290" x2="728" y2="290" stroke="#0F5E6B" stroke-width="1.2" marker-end="url(#pta)"/>
+        <text x="688" y="283" class="d-flecha">443</text>
+
+        <!-- leyenda de grupos de seguridad -->
+        <text x="30" y="606" class="d-zona">GRUPOS DE SEGURIDAD</text>
+
+        <rect x="30" y="620" width="10" height="10" fill="#0B6E7F"/>
+        <text x="48" y="629" class="d-nota">testenforce-alb</text>
+
+        <rect x="220" y="620" width="10" height="10" fill="#3A5CA8"/>
+        <text x="238" y="629" class="d-nota">testenforce-servicios</text>
+
+        <rect x="450" y="620" width="10" height="10" fill="#7B4B9E"/>
+        <text x="468" y="629" class="d-nota">testenforce-kafka</text>
+
+        <rect x="650" y="620" width="10" height="10" fill="#2C6E49"/>
+        <text x="668" y="629" class="d-nota">testenforce-bd</text>
+      </svg>
