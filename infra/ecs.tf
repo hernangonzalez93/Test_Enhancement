@@ -101,6 +101,19 @@ locals {
       migra = true
     }
 
+    "notifications-api" = {
+      # Sin base de datos: guarda los avisos en memoria. Es el consumidor mas
+      # barato de desplegar, y el que deja ver el fan-out de Kafka: lee el
+      # MISMO topic que Fleet, con su propio grupo y su propio marcador de
+      # posicion, asi que los dos reciben cada evento.
+      variables = merge(local.kafka_comun, {
+        "Kafka__Topic"   = "rental-events"
+        "Kafka__GroupId" = "notifications-service"
+      })
+      secretos = {}
+      migra    = false
+    }
+
     "rentals-api" = {
       variables = merge(local.kafka_comun, {
         # Publica, no consume: no necesita grupo de consumo.
