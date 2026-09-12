@@ -59,3 +59,35 @@ output "dns_interno" {
   description = "Nombre por el que los servicios se encuentran dentro de la VPC."
   value       = "kafka.${aws_service_discovery_private_dns_namespace.interno.name}:9092"
 }
+
+# ---------------------------------------------------------------------------
+# Y un nombre para cada servicio de aplicacion
+# ---------------------------------------------------------------------------
+# No solo Kafka: Rentals llama a Fleet y a Pricing por HTTP, y necesita
+# encontrarlos igual. Por el balanceador tambien podria, pero la llamada
+# saldria a internet y volveria a entrar, pagando latencia y trafico para
+# hablar con un vecino.
+#
+# El nombre se queda sin el sufijo "-api": `fleet.testenforce.local` se lee
+# mejor que `fleet-api.testenforce.local`, y es lo que espera la configuracion.
+# ---------------------------------------------------------------------------
+
+resource "aws_service_discovery_service" "servicio" {
+  for_each = var.services
+
+  name        = replace(each.key, "-api", "")
+  description = "Resuelve a las tareas de ${each.key} en marcha"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.interno.id
+
+    dns_records {
+      type = "A"
+      ttl  = 10
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  tags = { Name = "${var.project}-${each.key}" }
+}

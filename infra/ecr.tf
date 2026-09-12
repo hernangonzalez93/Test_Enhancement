@@ -7,7 +7,7 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_ecr_repository" "servicio" {
-  for_each = toset(var.services)
+  for_each = var.services
 
   name                 = "${var.project}/${each.key}"
   image_tag_mutability = "IMMUTABLE"

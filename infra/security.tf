@@ -20,7 +20,7 @@ resource "aws_security_group" "balanceador" {
 # propio no hay enrutado por host, y el enrutado por ruta solaparia los /health
 # de los servicios entre si, rompiendo las pruebas de humo.
 resource "aws_vpc_security_group_ingress_rule" "balanceador_entrada" {
-  for_each = { for i, s in var.services : s => 5101 + i }
+  for_each = var.services
 
   security_group_id = aws_security_group.balanceador.id
   description       = "HTTP para ${each.key}"
@@ -51,6 +51,18 @@ resource "aws_vpc_security_group_ingress_rule" "servicios_desde_balanceador" {
   security_group_id            = aws_security_group.servicios.id
   description                  = "Solo desde el balanceador"
   referenced_security_group_id = aws_security_group.balanceador.id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+}
+
+# Y ademas entre ellos: Rentals llama a Fleet y a Pricing por HTTP. El grupo se
+# referencia A SI MISMO, que es la forma de decir "los de dentro se hablan entre
+# si" sin enumerar direcciones que cambian en cada despliegue.
+resource "aws_vpc_security_group_ingress_rule" "servicios_entre_si" {
+  security_group_id            = aws_security_group.servicios.id
+  description                  = "Entre servicios, para las llamadas internas"
+  referenced_security_group_id = aws_security_group.servicios.id
   from_port                    = 8080
   to_port                      = 8080
   ip_protocol                  = "tcp"

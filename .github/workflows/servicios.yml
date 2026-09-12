@@ -78,8 +78,8 @@ jobs:
         run: |
           if [ "$ACCION" = "encender" ]; then TAREAS=1; else TAREAS=0; fi
 
-          # Kafka primero al encender: los demas lo necesitan para publicar.
-          for servicio in kafka pricing-api; do
+          # Kafka primero: los demas lo necesitan para publicar y consumir.
+          for servicio in kafka pricing-api fleet-api rentals-api; do
             aws ecs update-service \
               --cluster testenforce \
               --service "$servicio" \
@@ -88,7 +88,7 @@ jobs:
             echo "$servicio -> $TAREAS tarea(s)"
           done
 
-          aws ecs wait services-stable --cluster testenforce --services kafka pricing-api
+          aws ecs wait services-stable --cluster testenforce --services kafka pricing-api fleet-api rentals-api
 
           # La base de datos no tiene "cero tareas": se para y se arranca, y es
           # una llamada distinta. Ademas tarda varios minutos en cada sentido,
