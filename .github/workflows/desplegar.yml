@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'frontend/**'
       - 'Directory.*.props'
       - 'global.json'
       - '.github/workflows/desplegar.yml'
@@ -206,6 +207,56 @@ jobs:
           echo "Esperando a que se estabilicen..."
           aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS
 
+      # ---------------------------------------------------------------------
+      # El frontal no es un contenedor
+      # ---------------------------------------------------------------------
+      # Se compila y se copian los ficheros a S3, con CloudFront delante. Para
+      # tres ficheros estaticos, mantener un nginx vivo cuesta ~9 $/mes y anade
+      # algo mas que acordarse de apagar.
+      # ---------------------------------------------------------------------
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Construir el frontal
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Publicar en S3
+        run: |
+          BUCKET=$(aws s3api list-buckets \
+                     --query 'Buckets[?starts_with(Name, `testenforce-frontend-`)].Name' --output text)
+          echo "bucket: $BUCKET"
+
+          # Los ficheros con hash en el nombre —los que genera Vite— pueden
+          # cachearse para siempre: si cambian, cambia su nombre. Se suben
+          # primero para que nunca falte uno al que apunte el index nuevo.
+          aws s3 sync frontend/dist "s3://$BUCKET" \
+            --delete --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable"
+
+          # El index NO se cachea: es el unico fichero cuyo nombre no cambia, y
+          # es el que dice que version de los demas hay que cargar.
+          aws s3 cp frontend/dist/index.html "s3://$BUCKET/index.html" \
+            --cache-control "no-cache"
+
+      - name: Invalidar la cache de CloudFront
+        run: |
+          DIST=$(aws cloudfront list-distributions \
+                   --query "DistributionList.Items[?Comment=='testenforce - frontal'].Id" --output text)
+
+          # Solo el index: el resto lleva hash en el nombre, asi que una version
+          # nueva son ficheros nuevos que la cache no tiene. Invalidar /* seria
+          # tirar el trabajo del CDN sin motivo, y las primeras 1.000 rutas al
+          # mes son gratis pero el resto se pagan.
+          ID=$(aws cloudfront create-invalidation --distribution-id "$DIST" \
+                 --paths "/index.html" --query 'Invalidation.Id' --output text)
+          echo "invalidacion $ID lanzada"
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
@@ -300,6 +351,10 @@ jobs:
             echo "| Pricing | http://${{ steps.balanceador.outputs.dns }}:5102 |"
             echo "| Fleet | http://${{ steps.balanceador.outputs.dns }}:5103 |"
             echo "| Notifications | http://${{ steps.balanceador.outputs.dns }}:5104 |"
+            echo
+            CF=$(aws cloudfront list-distributions \
+                   --query "DistributionList.Items[?Comment=='testenforce - frontal'].DomainName" --output text)
+            echo "**La aplicacion:** https://$CF"
             echo
             echo "Se apagaran solos esta noche."
           } >> "$GITHUB_STEP_SUMMARY"
