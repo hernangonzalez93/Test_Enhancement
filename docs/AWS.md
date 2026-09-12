@@ -158,8 +158,15 @@ de separarlo. Con ellas se puede filtrar en Cost Explorer y crear un presupuesto
 ### El presupuesto
 
 Un presupuesto mensual con tres avisos, definido en
-[`presupuesto.tf`](../infra/presupuesto.tf). Los dos primeros presupuestos de una cuenta
-son gratis.
+[`bootstrap/presupuesto.tf`](../infra/bootstrap/presupuesto.tf). Los dos primeros
+presupuestos de una cuenta son gratis.
+
+**Vive en el bootstrap y no en `infra/`, y la razón se aprendió fallando.** Estaba en
+`infra/`, se lanzó el `destroy`, y la alarma de coste desapareció junto con lo que
+vigilaba. Una red de seguridad no debe destruirse con aquello de lo que protege.
+
+En el bootstrap sobrevive a cualquier ciclo de destruir y recrear, y cubre también lo que
+se cree a mano en la consola mientras la pila está desmontada.
 
 | Umbral | Tipo | Para qué |
 |---|---|---|
@@ -188,9 +195,9 @@ presupuesto tan alto que nunca salta no detecta nada. Con la infraestructura act
 0 $, cualquier gasto es una sorpresa que merece un aviso; cuando lleguen la base de
 datos y el balanceador se sube deliberadamente.
 
-El correo llega como **secreto** de GitHub y no como variable, al revés que los ARN de
-rol: es un dato personal y el repositorio es público. Terraform recoge del entorno
-cualquier `TF_VAR_<nombre>`, así que no aparece en el código.
+El correo **nunca va en el código**: el repositorio es público y es un dato personal.
+Como el bootstrap se aplica a mano, se pone en `infra/bootstrap/terraform.tfvars`, que
+está en `.gitignore`. Hay un `terraform.tfvars.example` al lado con la forma.
 
 ## 9. Cómo se aplica
 
