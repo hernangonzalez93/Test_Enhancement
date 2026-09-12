@@ -45,6 +45,33 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_APPLY }}
           aws-region: eu-west-1
 
+      # Este workflow enciende y apaga un servicio que YA EXISTE. Si la
+      # infraestructura se destruyo con el nivel 2, no hay nada que encender, y
+      # el error de AWS —ServiceNotFoundException— no explica que hacer.
+      - name: Comprobar que la infraestructura existe
+        run: |
+          if ! aws ecs describe-clusters --clusters testenforce                  --query 'clusters[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
+            echo "::error::La infraestructura no existe. Seguramente se destruyo con el nivel 2."
+            {
+              echo "## No hay nada que encender"
+              echo
+              echo "El cluster \`testenforce\` no existe, asi que este workflow no tiene"
+              echo "sobre que actuar. Lo mas probable es que la infraestructura se"
+              echo "destruyera con **Nivel 2**."
+              echo
+              echo "### Como volver"
+              echo
+              echo "| | Workflow | Tarda |"
+              echo "|---|---|---|"
+              echo "| 1 | **Terraform apply** | ~4 min |"
+              echo "| 2 | **Desplegar servicios** | ~6 min |"
+              echo
+              echo "El segundo hace falta porque al destruir se borro tambien el"
+              echo "registro de imagenes. Y el balanceador volvera con un DNS nuevo."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Aplicar
         env:
           ACCION: ${{ inputs.accion }}
