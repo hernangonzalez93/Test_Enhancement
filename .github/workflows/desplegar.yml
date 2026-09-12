@@ -376,6 +376,27 @@ jobs:
               continue
             fi
 
+            # Que la revision exista NO basta: puede apuntar a una imagen que
+            # no esta. La primera revision de cada servicio la escribe Terraform
+            # con una etiqueta de arranque que nunca se construye, y la politica
+            # de ECR solo guarda las 10 ultimas versiones.
+            #
+            # Volver a una revision asi deja el servicio reintentando para
+            # siempre un despliegue que no puede salir: ECS no encuentra la
+            # imagen, no arranca la tarea nueva, y el servicio se queda
+            # inestable hasta que alguien lo mira. Paso con el frontal.
+            IMAGEN=$(aws ecs describe-task-definition --task-definition "$ARN" \
+                       --query 'taskDefinition.containerDefinitions[0].image' --output text)
+            ETIQUETA="${IMAGEN##*:}"
+            REPO="${IMAGEN#*/}"; REPO="${REPO%:*}"
+
+            if ! aws ecr describe-images --repository-name "$REPO" \
+                   --image-ids "imageTag=$ETIQUETA" >/dev/null 2>&1; then
+              echo "$s: la imagen $ETIQUETA ya no esta en ECR, se deja como esta"
+              SIN_ANTERIOR="$SIN_ANTERIOR $s"
+              continue
+            fi
+
             aws ecs update-service --cluster "$CLUSTER" --service "$s" \
               --task-definition "$ARN" --no-cli-pager > /dev/null
             echo "$s revertido a $ARN"
