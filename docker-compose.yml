@@ -237,6 +237,16 @@ services:
     restart: unless-stopped
     ports:
       - "5173:8080"
+    environment:
+      # A donde manda nginx cada ruta /api. Aqui son los nombres del compose;
+      # en AWS los mismos nombres apuntan al DNS privado de la VPC, y por eso
+      # la configuracion de nginx es una plantilla y no un fichero fijo.
+      API_RENTALS: rentals-api:8080
+      API_FLEET: fleet-api:8080
+      API_NOTIFICATIONS: notifications-api:8080
+      API_INSURANCES: insurances-api:8080
+      API_BILLING: billing-api:8080
+      API_PRICING: pricing-api:8080
     depends_on:
       rentals-api:
         condition: service_healthy

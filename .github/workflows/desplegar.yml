@@ -21,6 +21,8 @@ concurrency:
 permissions:
   contents: read
   id-token: write
+  # Para preguntar por el estado del workflow de Terraform, mas abajo.
+  actions: read
 
 env:
   CLUSTER: testenforce
@@ -52,6 +54,49 @@ jobs:
       - name: Entrar en ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      # ---------------------------------------------------------------------
+      # Primero Terraform, despues el despliegue
+      # ---------------------------------------------------------------------
+      # Este workflow da por hecho que la definicion de tarea que va a leer ya
+      # es la que describe Terraform: la coge, le cambia SOLO la imagen y deja
+      # el resto —variables, secretos, sondas, memoria—.
+      #
+      # Si la fusion toca infra/ y src/ a la vez, los dos workflows arrancan
+      # juntos. Adelantarse significa copiar la definicion VIEJA y publicarla
+      # como nueva: la imagen seria la correcta y la configuracion no, que es
+      # la peor combinacion posible porque el despliegue sale en verde.
+      #
+      # Paso exactamente eso con el frontal: se desplego con la imagen nueva y
+      # sin las variables que le dicen a nginx donde estan sus vecinos.
+      # ---------------------------------------------------------------------
+      - name: Esperar a Terraform, si esta desplegando infraestructura
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          consulta() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SHA&per_page=100" \
+              --jq "[.workflow_runs[] | select(.name == \"Terraform apply\") | $1] | length"
+          }
+
+          for intento in $(seq 1 60); do
+            if [ "$(consulta 'select(.conclusion == "failure")')" != "0" ]; then
+              echo "::error::El Terraform apply de este commit ha fallado. No se despliega encima."
+              exit 1
+            fi
+
+            if [ "$(consulta 'select(.status != "completed")')" = "0" ]; then
+              echo "No hay ningun Terraform apply pendiente para $SHA."
+              exit 0
+            fi
+
+            echo "Terraform apply sigue en marcha (intento $intento/60)"
+            sleep 10
+          done
+
+          echo "::error::Terraform apply no ha terminado en 10 minutos"
+          exit 1
 
       # Fusionar un cambio que toca infra/ Y este workflow dispara los dos a la
       # vez, y este puede adelantarse al Terraform apply que crea los servicios.
@@ -327,6 +372,27 @@ jobs:
             # rojo y el resumen lo dice, asi que nadie lo confunde con un exito.
             if [ -z "$ARN" ] || [ "$ARN" = "None" ]; then
               echo "$s no tenia version anterior: se deja como esta"
+              SIN_ANTERIOR="$SIN_ANTERIOR $s"
+              continue
+            fi
+
+            # Que la revision exista NO basta: puede apuntar a una imagen que
+            # no esta. La primera revision de cada servicio la escribe Terraform
+            # con una etiqueta de arranque que nunca se construye, y la politica
+            # de ECR solo guarda las 10 ultimas versiones.
+            #
+            # Volver a una revision asi deja el servicio reintentando para
+            # siempre un despliegue que no puede salir: ECS no encuentra la
+            # imagen, no arranca la tarea nueva, y el servicio se queda
+            # inestable hasta que alguien lo mira. Paso con el frontal.
+            IMAGEN=$(aws ecs describe-task-definition --task-definition "$ARN" \
+                       --query 'taskDefinition.containerDefinitions[0].image' --output text)
+            ETIQUETA="${IMAGEN##*:}"
+            REPO="${IMAGEN#*/}"; REPO="${REPO%:*}"
+
+            if ! aws ecr describe-images --repository-name "$REPO" \
+                   --image-ids "imageTag=$ETIQUETA" >/dev/null 2>&1; then
+              echo "$s: la imagen $ETIQUETA ya no esta en ECR, se deja como esta"
               SIN_ANTERIOR="$SIN_ANTERIOR $s"
               continue
             fi
