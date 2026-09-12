@@ -82,7 +82,12 @@ resource "aws_iam_role_policy" "apagar" {
 # ---------------------------------------------------------------------------
 
 resource "aws_scheduler_schedule" "apagado" {
-  for_each = { pricing = aws_ecs_service.pricing.name }
+  # Un servicio nuevo se anade aqui, o se quedara encendido toda la noche
+  # sin que nadie lo note hasta ver la factura.
+  for_each = {
+    pricing = aws_ecs_service.pricing.name
+    kafka   = aws_ecs_service.kafka.name
+  }
 
   name                         = "${var.project}-apagar-${each.key}"
   description                  = "Baja ${each.value} a cero tareas cada noche"

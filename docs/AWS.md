@@ -224,3 +224,60 @@ conviene descubrir ahora y no dentro de seis meses.
 Lo que esta fase crea —red, registro y grupos de logs— **no cuesta nada por existir**,
 así que puede quedarse levantado sin problema. Lo que sí conviene destruir entre
 sesiones son la base de datos y el balanceador, que llegan en la fase 5.
+
+---
+
+## 10. Descubrimiento de servicios
+
+Hasta Kafka, todo se alcanzaba por el balanceador con puertos públicos. Kafka **no debe
+ser público**, y las IP de las tareas cambian en cada despliegue, así que nadie puede
+apuntar a una dirección fija.
+
+**Cloud Map** crea un DNS privado dentro de la VPC. ECS registra la tarea al arrancarla y
+la da de baja al pararla, y los demás servicios llaman a un nombre estable:
+
+```
+kafka.testenforce.local:9092
+```
+
+Es el equivalente al DNS interno que `docker compose` da gratis —ahí `kafka` resuelve al
+contenedor sin que nadie lo configure—. En AWS hay que pedirlo explícitamente.
+
+### La línea que lo hace funcionar
+
+```hcl
+KAFKA_ADVERTISED_LISTENERS = "PLAINTEXT://kafka.testenforce.local:9092"
+```
+
+Kafka tiene un comportamiento que sorprende: cuando un cliente se conecta, el broker le
+responde *«para hablar conmigo, usa esta dirección»*. Si anunciara su IP privada, el
+cliente la usaría **hasta que la tarea se reemplazase**, y entonces fallaría sin entender
+por qué. El nombre del descubrimiento sobrevive a los reemplazos; la IP no.
+
+El TTL del registro es de 10 segundos, para que los clientes dejen de usar una dirección
+muerta enseguida.
+
+## 11. El disco de Fargate, y por qué aquí se acepta perderlo
+
+Una tarea de Fargate trae 20 GB de disco, **atados a la vida de la tarea**. Muere la
+tarea, muere el disco. Y las tareas mueren a menudo:
+
+| Cuándo | Cada cuánto |
+|---|---|
+| En cada despliegue | Al publicar versión |
+| Si falla la sonda | ECS la mata y arranca otra |
+| **Al apagar y encender** | **Cada noche, en este proyecto** |
+| Mantenimiento de la plataforma | Cuando AWS quiere |
+
+Kafka guarda en disco los mensajes, los marcadores de posición de cada consumidor, y la
+identidad del clúster. Perderlo significa que los mensajes no consumidos desaparecen, los
+consumidores pierden su sitio, y el clúster se considera uno nuevo.
+
+**Aquí es aceptable** porque Kafka es **transporte y no almacén**: una renta vive en la
+base de datos de Rentals, un vehículo bloqueado en la de Fleet. Y como todo se apaga a la
+vez, no quedan mensajes en vuelo ni consumidores con un marcador obsoleto.
+
+**En producción no lo sería**, y por un motivo distinto: allí las tareas se reemplazan de
+una en una mientras el sistema atiende tráfico, así que un mensaje publicado y no
+consumido en ese instante se perdería sin que nadie lo notase. Ahí haría falta montar
+EFS.
