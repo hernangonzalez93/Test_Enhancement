@@ -49,6 +49,41 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # Fusionar un cambio que toca infra/ Y este workflow dispara los dos a la
+      # vez, y este puede adelantarse al Terraform apply que crea los servicios.
+      # Paso exactamente eso: al preguntar por la version anterior de Fleet y
+      # Rentals todavia no existian, se anoto la cadena "None", y la vuelta
+      # atras intento luego desplegar una definicion con ese nombre.
+      - name: Esperar a que existan los servicios
+        run: |
+          for intento in $(seq 1 30); do
+            FALTAN=""
+            for s in $SERVICIOS; do
+              ESTADO=$(aws ecs describe-services --cluster "$CLUSTER" --services "$s" \
+                         --query 'services[0].status' --output text 2>/dev/null || echo None)
+              [ "$ESTADO" = "ACTIVE" ] || FALTAN="$FALTAN $s"
+            done
+
+            if [ -z "$FALTAN" ]; then
+              echo "Los servicios existen."
+              exit 0
+            fi
+
+            echo "Esperando a:$FALTAN (intento $intento/30)"
+            sleep 10
+          done
+
+          echo "::error::Estos servicios no existen tras 5 minutos:$FALTAN"
+          {
+            echo "## No se puede desplegar"
+            echo
+            echo "Faltan servicios en el cluster:\`$FALTAN\`"
+            echo
+            echo "Si acabas de destruir la infraestructura, lanza primero"
+            echo "**Terraform apply** y vuelve a intentarlo."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
       - name: Calcular la etiqueta
         id: version
         run: echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
@@ -204,12 +239,27 @@ jobs:
         if: steps.humo.outcome == 'failure'
         run: |
           echo "::error::El humo ha fallado. Volviendo a las versiones anteriores."
+          SIN_ANTERIOR=""
+
           for s in $SERVICIOS; do
             ARN=$(grep "^$s=" versiones-anteriores.txt | cut -d= -f2-)
+
+            # Un servicio recien creado no tiene version anterior. Se deja como
+            # esta en lugar de apagarlo: lo mas probable es que el fallo sea de
+            # configuracion y quieras mirarlo en marcha. El workflow queda en
+            # rojo y el resumen lo dice, asi que nadie lo confunde con un exito.
+            if [ -z "$ARN" ] || [ "$ARN" = "None" ]; then
+              echo "$s no tenia version anterior: se deja como esta"
+              SIN_ANTERIOR="$SIN_ANTERIOR $s"
+              continue
+            fi
+
             aws ecs update-service --cluster "$CLUSTER" --service "$s" \
               --task-definition "$ARN" --no-cli-pager > /dev/null
             echo "$s revertido a $ARN"
           done
+
+          echo "SIN_ANTERIOR=$SIN_ANTERIOR" >> "$GITHUB_ENV"
           aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS
 
       - name: Fallar si hubo que volver atras
@@ -223,6 +273,16 @@ jobs:
             echo
             echo "> Se ha revertido el codigo, **no el esquema**. Una migracion ya"
             echo "> aplicada sigue aplicada."
+            if [ -n "$SIN_ANTERIOR" ]; then
+              echo
+              echo "### Sin version anterior"
+              echo
+              echo "Estos servicios son nuevos y no habia a donde volver, asi que"
+              echo "siguen en marcha con la version que ha fallado:"
+              echo
+              echo "\`$SIN_ANTERIOR\`"
+              echo
+              echo "Revisalos a mano antes de volver a desplegar."
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
