@@ -230,10 +230,23 @@ resource "aws_ecs_task_definition" "servicio" {
     }
   ])
 
-  # La version que corre la decide el pipeline de despliegue, no este fichero.
-  lifecycle {
-    ignore_changes = [container_definitions]
-  }
+  # SIN ignore_changes, y es deliberado.
+  #
+  # Antes se ignoraba `container_definitions` entero, para que Terraform no
+  # peleara con el pipeline por la etiqueta de la imagen. El razonamiento era
+  # correcto y el instrumento demasiado grande: dentro de ese bloque no solo
+  # esta la imagen, sino las variables de entorno, los secretos, la sonda y la
+  # configuracion de logs. Ignorarlo todo significaba que cambiar cualquiera de
+  # esas cosas en este fichero no llegaba nunca a AWS.
+  #
+  # Paso con el frontal: se le anadieron las variables que le dicen a nginx
+  # donde estan sus vecinos, Terraform las dio por aplicadas y AWS nunca las
+  # vio. La imagen nueva las exigia, asi que nginx se negaba a arrancar.
+  #
+  # Quien decide que version CORRE no es este recurso: es el servicio, que si
+  # ignora `task_definition`. Aqui solo se describe como debe ser una tarea, y
+  # el pipeline parte de esta descripcion para registrar la suya con la imagen
+  # del dia. Son revisiones distintas, asi que no hay pelea que evitar.
 
   tags = { Name = "${var.project}-${each.key}" }
 }
