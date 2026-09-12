@@ -18,6 +18,10 @@ usuario en un navegador real.
 > Y [`docs/CONFIGURACION.md`](docs/CONFIGURACION.md) para cómo se resuelve un valor de
 > configuración: el orden de las fuentes, la traducción de `__` a `:` y por qué la
 > misma imagen sirve para local y para producción.
+>
+> Y [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) para ver lo que hay desplegado en
+> AWS: la red, los grupos de seguridad regla a regla, el recorrido de una petición y
+> por qué todos los servicios escuchan en el mismo puerto sin chocar.
 
 ---
 
@@ -124,6 +128,9 @@ docs/CONFIGURACION.md             Proveedores de configuración, prioridades y s
 docs/CICD.md                      Integración continua y, más adelante, despliegue
 docs/AWS.md                       Infraestructura en AWS y decisiones de coste
 docs/AWS-GITOPS.md                Cómo se aplica la infraestructura desde Actions
+docs/ARQUITECTURA.md              Qué hay desplegado en AWS y cómo está conectado
+docs/arquitectura.html            El mismo documento, para leer en el navegador
+docs/img/                         Los diagramas, y el guion que los genera
 ```
 
 ---

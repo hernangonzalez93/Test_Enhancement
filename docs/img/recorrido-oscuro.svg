@@ -1,0 +1,81 @@
+<svg viewBox="0 0 980 330" role="img" aria-label="Una petición entra por el balanceador a rentals-api, que consulta fleet-api y pricing-api por el DNS privado, guarda en PostgreSQL y publica en Kafka. Desde Kafka, fleet-api y notifications-api consumen el mismo evento con grupos de consumo distintos." xmlns="http://www.w3.org/2000/svg" width="980" height="330">
+  <style>
+    .d-titulo { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; fill: #E7EBF0; }
+    .d-zona   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #8B96A5; letter-spacing: 0.06em; }
+    .d-cidr   { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 10px; fill: #8B96A5; }
+    .d-caja   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #E7EBF0; }
+    .d-sub    { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 9.5px; fill: #8B96A5; }
+    .d-flecha { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #4FB3C4; font-weight: 500; }
+    .d-nota   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #8B96A5; }
+  </style>
+  <rect width="980" height="330" fill="#151B22"/>
+        <defs>
+          <marker id="pta3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4FB3C4"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="130" width="112" height="46" rx="3" fill="#1D242D" stroke="#2A323C"/>
+        <text x="76" y="149" text-anchor="middle" class="d-caja">Navegador</text>
+        <text x="76" y="164" text-anchor="middle" class="d-sub">o Postman</text>
+
+        <line x1="132" y1="153" x2="196" y2="153" stroke="#4FB3C4" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="164" y="145" text-anchor="middle" class="d-flecha">:5101</text>
+
+        <rect x="200" y="122" width="140" height="62" rx="3" fill="#14323A" stroke="#4FB3C4"/>
+        <text x="270" y="146" text-anchor="middle" class="d-caja">rentals-api</text>
+        <text x="270" y="162" text-anchor="middle" class="d-sub">crea la renta</text>
+        <text x="270" y="176" text-anchor="middle" class="d-sub">y la confirma</text>
+
+        <!-- consultas sincronas -->
+        <line x1="340" y1="136" x2="428" y2="74" stroke="#4FB3C4" stroke-width="1.2" marker-end="url(#pta3)"/>
+        <text x="356" y="96" class="d-flecha">fleet.testenforce.local</text>
+
+        <line x1="340" y1="152" x2="428" y2="132" stroke="#4FB3C4" stroke-width="1.2" marker-end="url(#pta3)"/>
+        <text x="356" y="130" class="d-flecha">pricing.testenforce.local</text>
+
+        <rect x="432" y="50" width="150" height="44" rx="3" fill="#151B22" stroke="#2A323C"/>
+        <text x="507" y="68" text-anchor="middle" class="d-caja">fleet-api</text>
+        <text x="507" y="83" text-anchor="middle" class="d-sub">¿existe el vehículo?</text>
+
+        <rect x="432" y="110" width="150" height="44" rx="3" fill="#151B22" stroke="#2A323C"/>
+        <text x="507" y="128" text-anchor="middle" class="d-caja">pricing-api</text>
+        <text x="507" y="143" text-anchor="middle" class="d-sub">¿cuánto cuesta?</text>
+
+        <!-- persistencia -->
+        <line x1="270" y1="184" x2="270" y2="248" stroke="#4FB3C4" stroke-width="1.2" marker-end="url(#pta3)"/>
+        <text x="278" y="222" class="d-flecha">guarda</text>
+
+        <rect x="196" y="252" width="150" height="44" rx="3" fill="#151B22" stroke="#2A323C"/>
+        <text x="271" y="270" text-anchor="middle" class="d-caja">PostgreSQL</text>
+        <text x="271" y="285" text-anchor="middle" class="d-sub">esquema rentals</text>
+
+        <!-- kafka -->
+        <line x1="340" y1="168" x2="602" y2="196" stroke="#4FB3C4" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="430" y="190" class="d-flecha">publica rental.confirmed</text>
+
+        <rect x="606" y="172" width="150" height="50" rx="3" fill="#14323A" stroke="#4FB3C4"/>
+        <text x="681" y="193" text-anchor="middle" class="d-caja">Kafka</text>
+        <text x="681" y="208" text-anchor="middle" class="d-sub">topic rental-events</text>
+
+        <!-- fan out -->
+        <line x1="756" y1="186" x2="832" y2="110" stroke="#4FB3C4" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="748" y="136" class="d-flecha">fleet-service</text>
+
+        <line x1="756" y1="208" x2="832" y2="266" stroke="#4FB3C4" stroke-width="1.4" marker-end="url(#pta3)"/>
+        <text x="748" y="254" class="d-flecha">notifications-service</text>
+
+        <rect x="836" y="72" width="126" height="52" rx="3" fill="#151B22" stroke="#2A323C"/>
+        <text x="899" y="93" text-anchor="middle" class="d-caja">fleet-api</text>
+        <text x="899" y="109" text-anchor="middle" class="d-sub">bloquea el coche</text>
+
+        <rect x="836" y="240" width="126" height="52" rx="3" fill="#151B22" stroke="#2A323C"/>
+        <text x="899" y="261" text-anchor="middle" class="d-caja">notifications-api</text>
+        <text x="899" y="277" text-anchor="middle" class="d-sub">guarda el aviso</text>
+
+        <text x="606" y="250" class="d-nota">Dos grupos de consumo distintos sobre el</text>
+        <text x="606" y="264" class="d-nota">mismo topic: cada uno lleva su propio</text>
+        <text x="606" y="278" class="d-nota">marcador y ambos reciben todo.</text>
+
+        <text x="20" y="318" class="d-nota">El identificador de correlación entra en la cabecera X-Correlation-Id, viaja en el Activity, cruza Kafka como cabecera del mensaje y aparece en los logs de los tres servicios.</text>
+      </svg>

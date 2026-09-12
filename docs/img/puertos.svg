@@ -1,0 +1,71 @@
+<svg viewBox="0 0 980 300" role="img" aria-label="El balanceador tiene un escuchador por servicio en los puertos 5101, 5102, 5103, 5104 y 5173. Cada uno reenvía a una tarea distinta, y todas escuchan en el puerto 8080 de su propia dirección IP privada." xmlns="http://www.w3.org/2000/svg" width="980" height="300">
+  <style>
+    .d-titulo { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; fill: #12171F; }
+    .d-zona   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #5B6573; letter-spacing: 0.06em; }
+    .d-cidr   { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 10px; fill: #5B6573; }
+    .d-caja   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #12171F; }
+    .d-sub    { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; font-size: 9.5px; fill: #5B6573; }
+    .d-flecha { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #0F5E6B; font-weight: 500; }
+    .d-nota   { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; fill: #5B6573; }
+  </style>
+  <rect width="980" height="300" fill="#FFFFFF"/>
+        <defs>
+          <marker id="pta4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0F5E6B"/>
+          </marker>
+        </defs>
+
+        <rect x="24" y="30" width="196" height="222" rx="3" fill="#E2F0F1" stroke="#0F5E6B"/>
+        <text x="122" y="54" text-anchor="middle" class="d-titulo">Balanceador</text>
+
+        <rect x="40" y="70" width="164" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="122" y="88" text-anchor="middle" class="d-sub">escuchador :5101</text>
+        <rect x="40" y="104" width="164" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="122" y="122" text-anchor="middle" class="d-sub">escuchador :5102</text>
+        <rect x="40" y="138" width="164" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="122" y="156" text-anchor="middle" class="d-sub">escuchador :5103</text>
+        <rect x="40" y="172" width="164" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="122" y="190" text-anchor="middle" class="d-sub">escuchador :5104</text>
+        <rect x="40" y="206" width="164" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="122" y="224" text-anchor="middle" class="d-sub">escuchador :5173</text>
+
+        <line x1="220" y1="83" x2="352" y2="83" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="117" x2="352" y2="117" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="151" x2="352" y2="151" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="185" x2="352" y2="185" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta4)"/>
+        <line x1="220" y1="219" x2="352" y2="219" stroke="#0F5E6B" stroke-width="1.3" marker-end="url(#pta4)"/>
+
+        <text x="286" y="62" text-anchor="middle" class="d-flecha">un grupo de destinos cada uno</text>
+
+        <rect x="356" y="70" width="330" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="368" y="88" class="d-caja">rentals-api</text>
+        <text x="674" y="88" text-anchor="end" class="d-sub">10.20.0.210:8080</text>
+
+        <rect x="356" y="104" width="330" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="368" y="122" class="d-caja">pricing-api</text>
+        <text x="674" y="122" text-anchor="end" class="d-sub">10.20.0.216:8080</text>
+
+        <rect x="356" y="138" width="330" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="368" y="156" class="d-caja">fleet-api</text>
+        <text x="674" y="156" text-anchor="end" class="d-sub">10.20.1.253:8080</text>
+
+        <rect x="356" y="172" width="330" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="368" y="190" class="d-caja">notifications-api</text>
+        <text x="674" y="190" text-anchor="end" class="d-sub">10.20.0.233:8080</text>
+
+        <rect x="356" y="206" width="330" height="26" rx="2" fill="#FFFFFF" stroke="#D9DEE5"/>
+        <text x="368" y="224" class="d-caja">frontend · nginx</text>
+        <text x="674" y="224" text-anchor="end" class="d-sub">10.20.0.130:8080</text>
+
+        <rect x="706" y="70" width="250" height="162" rx="3" fill="#EDEFF3" stroke="#D9DEE5"/>
+        <text x="722" y="92" class="d-titulo">Por qué no chocan</text>
+        <text x="722" y="112" class="d-nota">Cada tarea de Fargate recibe su</text>
+        <text x="722" y="126" class="d-nota">propia interfaz de red, con su propia</text>
+        <text x="722" y="140" class="d-nota">dirección dentro de la VPC.</text>
+        <text x="722" y="162" class="d-nota">Un puerto solo puede chocar con otro</text>
+        <text x="722" y="176" class="d-nota">si comparten máquina. Aquí no la</text>
+        <text x="722" y="190" class="d-nota">comparten: para la red, cada tarea</text>
+        <text x="722" y="204" class="d-nota">es una máquina distinta.</text>
+
+        <text x="24" y="278" class="d-nota">Las direcciones son las de un momento concreto: cambian en cada despliegue. Lo que no cambia es que sean seis distintas y el puerto, uno.</text>
+      </svg>
