@@ -7,7 +7,7 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_cloudwatch_log_group" "servicio" {
-  for_each = var.services
+  for_each = local.expuestos
 
   name              = "/ecs/${var.project}/${each.key}"
   retention_in_days = var.log_retention_days

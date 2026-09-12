@@ -50,3 +50,26 @@ variable "log_retention_days" {
   type        = number
   default     = 7
 }
+
+variable "frontal" {
+  description = <<-EOT
+    Como se sirve el frontal. Es un interruptor, no dos configuraciones:
+
+      nginx       una tarea de ECS mas, detras del balanceador. Cuesta ~9 $/mes
+                  y hay que acordarse de apagarla, pero funciona hoy.
+
+      cloudfront  los ficheros en S3 con CloudFront delante. Practicamente
+                  gratis y sin nada que apagar, pero AWS exige verificar la
+                  cuenta antes de permitir crear distribuciones.
+
+    Cambiar de uno a otro es cambiar este valor: el codigo de los dos caminos
+    convive, y solo se crea el del modo activo.
+  EOT
+  type        = string
+  default     = "nginx"
+
+  validation {
+    condition     = contains(["nginx", "cloudfront"], var.frontal)
+    error_message = "Solo vale 'nginx' o 'cloudfront'."
+  }
+}

@@ -75,19 +75,47 @@ resource "aws_iam_role" "tarea" {
 locals {
   interno = aws_service_discovery_private_dns_namespace.interno.name
 
+  # Lo que el balanceador publica. El frontal se suma solo cuando se sirve con
+  # nginx; con CloudFront no hay tarea que exponer.
+  expuestos = merge(
+    var.services,
+    var.frontal == "nginx" ? { frontend = 5173 } : {}
+  )
+
   # Lo que comparten los que hablan con Kafka.
   kafka_comun = {
     "Kafka__BootstrapServers" = "kafka.${local.interno}:9092"
     "Kafka__Enabled"          = "true"
   }
 
-  servicios = {
+  # Cada imagen se sonda con lo que garantiza tener. La de .NET lleva curl
+  # instalado a proposito en su Dockerfile; la de nginx se apoya en el wget de
+  # busybox, presente en cualquier variante alpine.
+  #
+  # (Comprobado: esta version de nginx tambien trae curl. Pero depender de algo
+  # que la imagen no promete es como se acaba con una sonda que falla siempre
+  # tras una actualizacion, y una sonda que falla siempre reinicia la tarea en
+  # bucle sin que el problema este en la aplicacion.)
+  sonda_dotnet = "curl -fsS http://localhost:8080/health || exit 1"
+  sonda_nginx  = "wget -q --spider http://127.0.0.1:8080/health || exit 1"
+
+  frontal_nginx = var.frontal != "nginx" ? {} : {
+    "frontend" = {
+      variables = {}
+      secretos  = {}
+      migra     = false
+      sonda     = local.sonda_nginx
+    }
+  }
+
+  servicios = merge(local.frontal_nginx, {
     "pricing-api" = {
       # Sin estado, sin base de datos y sin mensajeria: el mas simple de todos,
       # y por eso fue el primero en desplegarse.
       variables = {}
       secretos  = {}
       migra     = false
+      sonda     = local.sonda_dotnet
     }
 
     "fleet-api" = {
@@ -99,6 +127,7 @@ locals {
         "ConnectionStrings__FleetDatabase" = aws_ssm_parameter.cadena_conexion["Fleet"].arn
       }
       migra = true
+      sonda = local.sonda_dotnet
     }
 
     "notifications-api" = {
@@ -112,6 +141,7 @@ locals {
       })
       secretos = {}
       migra    = false
+      sonda    = local.sonda_dotnet
     }
 
     "rentals-api" = {
@@ -126,8 +156,9 @@ locals {
         "ConnectionStrings__RentalsDatabase" = aws_ssm_parameter.cadena_conexion["Rentals"].arn
       }
       migra = true
+      sonda = local.sonda_dotnet
     }
-  }
+  })
 }
 
 # ---------------------------------------------------------------------------
@@ -175,7 +206,7 @@ resource "aws_ecs_task_definition" "servicio" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+        command     = ["CMD-SHELL", each.value.sonda]
         interval    = 30
         timeout     = 5
         retries     = 3

@@ -20,7 +20,7 @@ resource "aws_security_group" "balanceador" {
 # propio no hay enrutado por host, y el enrutado por ruta solaparia los /health
 # de los servicios entre si, rompiendo las pruebas de humo.
 resource "aws_vpc_security_group_ingress_rule" "balanceador_entrada" {
-  for_each = var.services
+  for_each = local.expuestos
 
   security_group_id = aws_security_group.balanceador.id
   description       = "HTTP para ${each.key}"

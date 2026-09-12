@@ -7,7 +7,7 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_ecr_repository" "servicio" {
-  for_each = var.services
+  for_each = local.expuestos
 
   name                 = "${var.project}/${each.key}"
   image_tag_mutability = "IMMUTABLE"

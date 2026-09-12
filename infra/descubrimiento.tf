@@ -73,7 +73,7 @@ output "dns_interno" {
 # ---------------------------------------------------------------------------
 
 resource "aws_service_discovery_service" "servicio" {
-  for_each = var.services
+  for_each = local.expuestos
 
   name        = replace(each.key, "-api", "")
   description = "Resuelve a las tareas de ${each.key} en marcha"

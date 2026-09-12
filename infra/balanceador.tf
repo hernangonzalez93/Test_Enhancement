@@ -29,7 +29,7 @@ resource "aws_lb" "principal" {
 # ---------------------------------------------------------------------------
 
 resource "aws_lb_target_group" "servicio" {
-  for_each = var.services
+  for_each = local.expuestos
 
   name     = "${var.project}-${replace(each.key, "-api", "")}"
   port     = 8080
@@ -76,7 +76,7 @@ resource "aws_lb_target_group" "servicio" {
 # ---------------------------------------------------------------------------
 
 resource "aws_lb_listener" "servicio" {
-  for_each = var.services
+  for_each = local.expuestos
 
   load_balancer_arn = aws_lb.principal.arn
   port              = each.value
