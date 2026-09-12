@@ -281,3 +281,75 @@ vez, no quedan mensajes en vuelo ni consumidores con un marcador obsoleto.
 una en una mientras el sistema atiende tráfico, así que un mensaje publicado y no
 consumido en ese instante se perdería sin que nadie lo notase. Ahí haría falta montar
 EFS.
+
+---
+
+## 12. La base de datos
+
+**Una sola instancia para los tres servicios** que tienen base de datos. Es lo mismo que
+hace el compose: una base llamada `testenforce` con tres esquemas dentro -`rentals`,
+`fleet` y `billing`-. Tres instancias separadas serian 45 $/mes en lugar de 15, y no
+ensenarian nada distinto.
+
+Vive en las **subredes privadas**, las que se crearon en la fase 3 y hasta ahora no
+usaba nadie: existian esperando precisamente esto. No tienen ruta a internet, asi que la
+base de datos no puede salir ni ser alcanzada desde fuera; solo desde el grupo de
+seguridad de las tareas.
+
+### La contrasena no la escribe nadie
+
+La genera Terraform con `random_password` y la guarda en Parameter Store como
+`SecureString`. Ni tu ni yo la vemos nunca.
+
+Hay un parametro por servicio, **con el nombre exacto de la variable de entorno** que
+espera cada aplicacion:
+
+```
+/testenforce/dev/ConnectionStrings__RentalsDatabase
+```
+
+Asi la definicion de tarea solo tiene que apuntar al parametro: no hay que traducir nada
+entre lo que guarda AWS y lo que lee .NET.
+
+Y sin caracteres especiales a proposito: acaban dentro de una cadena de conexion, donde
+un `;` o un `=` la partirian por la mitad.
+
+### Quien lee los secretos
+
+El **rol de ejecucion**, no el de tarea. Los resuelve el agente de ECS antes de arrancar
+el contenedor, asi que el permiso va ahi. Es el error mas repetido al configurar secretos
+en ECS.
+
+Y hacen falta dos permisos, no uno: `ssm:GetParameters` para leerlo y `kms:Decrypt` para
+descifrarlo. Con solo el primero, la tarea falla al arrancar con un error que **no
+menciona KMS por ningun lado**.
+
+### Los dos ajustes que hacen que el `destroy` funcione
+
+```hcl
+skip_final_snapshot = true
+deletion_protection = false
+```
+
+Sin el primero, destruir pide un nombre de copia final y aborta. Sin el segundo, RDS se
+niega directamente. Es la misma trampa que el `force_delete` de ECR, con la misma
+consecuencia: una destruccion a medias.
+
+Son aceptables porque esta base se reconstruye desde cero -las migraciones la recrean y
+los datos son de prueba-. Con datos reales, los dos deberian estar al reves.
+
+### Apagarla no es lo mismo que apagar una tarea
+
+Un servicio de ECS se apaga poniendolo a cero tareas. Una instancia de RDS no tiene ese
+concepto: **se para**, y es una llamada distinta. El apagado nocturno y el interruptor de
+nivel 1 hacen las dos cosas.
+
+Dos advertencias:
+
+**Parada no es gratis.** Se deja de pagar el computo -lo caro- pero se sigue pagando el
+almacenamiento, unos 2 $/mes por los 20 GB. Para llegar a cero de verdad hace falta el
+nivel 2.
+
+**AWS la vuelve a encender sola a los 7 dias.** Es una politica suya, para poder aplicar
+mantenimiento. Si se va a estar mas de una semana sin tocarla, es mejor destruirla que
+dejarla parada.
