@@ -25,7 +25,7 @@ env:
   CLUSTER: testenforce
   # El orden importa al desplegar: Fleet antes que Rentals, porque Rentals le
   # llama nada mas arrancar para resolver vehiculos.
-  SERVICIOS: pricing-api fleet-api rentals-api
+  SERVICIOS: pricing-api fleet-api notifications-api rentals-api
   # Los que tienen base de datos y por tanto migraciones que aplicar.
   CON_BASE_DE_DATOS: fleet-api rentals-api
 
@@ -223,10 +223,11 @@ jobs:
         id: humo
         continue-on-error: true
         env:
-          SMOKE_SERVICES: pricing,fleet,rentals
+          SMOKE_SERVICES: pricing,fleet,rentals,notifications
           SMOKE_PRICING_URL: http://${{ steps.balanceador.outputs.dns }}:5102
           SMOKE_FLEET_URL: http://${{ steps.balanceador.outputs.dns }}:5103
           SMOKE_RENTALS_URL: http://${{ steps.balanceador.outputs.dns }}:5101
+          SMOKE_NOTIFICATIONS_URL: http://${{ steps.balanceador.outputs.dns }}:5104
         run: dotnet test tests/Smoke.Tests
 
       # Si el humo falla, se vuelve a la version anterior sin esperar a que
@@ -298,6 +299,7 @@ jobs:
             echo "| Rentals | http://${{ steps.balanceador.outputs.dns }}:5101 |"
             echo "| Pricing | http://${{ steps.balanceador.outputs.dns }}:5102 |"
             echo "| Fleet | http://${{ steps.balanceador.outputs.dns }}:5103 |"
+            echo "| Notifications | http://${{ steps.balanceador.outputs.dns }}:5104 |"
             echo
             echo "Se apagaran solos esta noche."
           } >> "$GITHUB_STEP_SUMMARY"

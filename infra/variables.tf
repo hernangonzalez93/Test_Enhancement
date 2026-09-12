@@ -38,9 +38,10 @@ variable "services" {
   EOT
   type        = map(number)
   default = {
-    "rentals-api" = 5101
-    "pricing-api" = 5102
-    "fleet-api"   = 5103
+    "rentals-api"       = 5101
+    "pricing-api"       = 5102
+    "fleet-api"         = 5103
+    "notifications-api" = 5104
   }
 }
 
