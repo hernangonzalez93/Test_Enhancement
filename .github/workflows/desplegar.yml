@@ -256,7 +256,13 @@ jobs:
             fi
           done
 
+      # continue-on-error para que un despliegue que no arranca no corte el
+      # workflow aqui mismo: si cortara, la vuelta atras no llegaria a correr y
+      # el servicio se quedaria reintentando una version que no puede arrancar.
+      # Es lo que paso con el frontal, que estuvo horas en bucle.
       - name: Desplegar
+        id: desplegar
+        continue-on-error: true
         run: |
           for s in $SERVICIOS; do
             ARN=$(grep "^$s=" versiones-nuevas.txt | cut -d= -f2-)
@@ -339,6 +345,7 @@ jobs:
       # a lo desplegado, y el resto se salta en lugar de fallar.
       - name: Pruebas de humo contra el despliegue
         id: humo
+        if: steps.desplegar.outcome == 'success'
         continue-on-error: true
         env:
           # El frontal entra en la lista solo cuando es una tarea que se puede
@@ -357,10 +364,14 @@ jobs:
       # OJO: esto revierte el CODIGO, no el esquema. Una migracion ya aplicada
       # sigue aplicada, y por eso las migraciones tienen que ser compatibles
       # hacia atras: anadir una columna, no renombrarla.
-      - name: Volver atras si el humo ha fallado
-        if: steps.humo.outcome == 'failure'
+      - name: Volver atras
+        if: steps.desplegar.outcome == 'failure' || steps.humo.outcome == 'failure'
         run: |
-          echo "::error::El humo ha fallado. Volviendo a las versiones anteriores."
+          if [ "${{ steps.desplegar.outcome }}" = "failure" ]; then
+            echo "::error::El despliegue no se ha estabilizado. Volviendo a las versiones anteriores."
+          else
+            echo "::error::El humo ha fallado. Volviendo a las versiones anteriores."
+          fi
           SIN_ANTERIOR=""
 
           for s in $SERVICIOS; do
@@ -403,15 +414,24 @@ jobs:
           done
 
           echo "SIN_ANTERIOR=$SIN_ANTERIOR" >> "$GITHUB_ENV"
-          aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS
+
+          # Si la vuelta atras tampoco se estabiliza, se avisa pero no se corta:
+          # cortar aqui dejaria el resumen sin escribir, que es justo lo que hay
+          # que leer cuando algo ha ido mal.
+          aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS             || echo "::warning::Algun servicio no se ha estabilizado tras la vuelta atras"
 
       - name: Fallar si hubo que volver atras
-        if: steps.humo.outcome == 'failure'
+        if: steps.desplegar.outcome == 'failure' || steps.humo.outcome == 'failure'
         run: |
           {
             echo "## Despliegue revertido"
             echo
-            echo "La version \`${{ steps.version.outputs.tag }}\` no paso las pruebas de humo."
+            if [ "${{ steps.desplegar.outcome }}" = "failure" ]; then
+              echo "La version \`${{ steps.version.outputs.tag }}\` no llego a arrancar."
+              echo "Mira los eventos del servicio y los logs en CloudWatch."
+            else
+              echo "La version \`${{ steps.version.outputs.tag }}\` no paso las pruebas de humo."
+            fi
             echo "Los servicios han vuelto solos a la version anterior."
             echo
             echo "> Se ha revertido el codigo, **no el esquema**. Una migracion ya"
@@ -426,6 +446,7 @@ jobs:
               echo "\`$SIN_ANTERIOR\`"
               echo
               echo "Revisalos a mano antes de volver a desplegar."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
