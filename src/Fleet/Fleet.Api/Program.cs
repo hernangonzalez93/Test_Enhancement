@@ -95,7 +95,17 @@ app.MapPost("/api/vehicles", async (CreateVehicleRequest request, FleetDbContext
 if (args.Contains("migrate"))
 {
     using var migrationScope = app.Services.CreateScope();
-    await migrationScope.ServiceProvider.GetRequiredService<FleetDbContext>().Database.MigrateAsync();
+    var migrationContext = migrationScope.ServiceProvider.GetRequiredService<FleetDbContext>();
+    await migrationContext.Database.MigrateAsync();
+
+    // La flota inicial forma parte de preparar la base de datos, no de
+    // arrancar la aplicacion. Vivia dentro del bloque de AutoMigrate, asi que
+    // en un despliegue real —donde AutoMigrate esta apagado— el esquema se
+    // creaba vacio y la API respondia correctamente... con cero vehiculos.
+    //
+    // Lo detectaron las pruebas de humo tras el primer despliegue en AWS.
+    // Es idempotente: comprueba cada vehiculo antes de anadirlo.
+    await FleetSeed.EnsureSeededAsync(migrationContext);
     return;
 }
 
