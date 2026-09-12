@@ -19,6 +19,12 @@ concurrency:
   cancel-in-progress: false
 
 
+# El modo del frontal llega por variable de repositorio, la MISMA que lee el
+# workflow de despliegue. Con dos fuentes de verdad, Terraform crearia una cosa
+# y el pipeline desplegaria otra.
+env:
+  TF_VAR_frontal: ${{ vars.FRONTAL || 'nginx' }}
+
 permissions:
   contents: read
   id-token: write

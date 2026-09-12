@@ -16,6 +16,8 @@
 # exactamente lo que hace nginx en local, pero sin proceso que mantener.
 # ---------------------------------------------------------------------------
 
+# El bucket se crea en los DOS modos. Vacio es gratis, y tenerlo ya creado hace
+# que pasar a CloudFront sea solo anadir la distribucion.
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.project}-frontend-${data.aws_caller_identity.actual.account_id}"
 
@@ -39,6 +41,8 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
 }
 
 resource "aws_cloudfront_origin_access_control" "frontend" {
+  count = var.frontal == "cloudfront" ? 1 : 0
+
   name                              = "${var.project}-frontend"
   description                       = "Acceso de CloudFront al bucket del frontal"
   origin_access_control_origin_type = "s3"
@@ -47,6 +51,8 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 }
 
 data "aws_iam_policy_document" "frontend" {
+  count = var.frontal == "cloudfront" ? 1 : 0
+
   statement {
     effect    = "Allow"
     actions   = ["s3:GetObject"]
@@ -61,14 +67,16 @@ data "aws_iam_policy_document" "frontend" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.frontend.arn]
+      values   = [aws_cloudfront_distribution.frontend[0].arn]
     }
   }
 }
 
 resource "aws_s3_bucket_policy" "frontend" {
+  count = var.frontal == "cloudfront" ? 1 : 0
+
   bucket = aws_s3_bucket.frontend.id
-  policy = data.aws_iam_policy_document.frontend.json
+  policy = data.aws_iam_policy_document.frontend[0].json
 }
 
 # ---------------------------------------------------------------------------
@@ -93,6 +101,8 @@ locals {
 }
 
 resource "aws_cloudfront_distribution" "frontend" {
+  count = var.frontal == "cloudfront" ? 1 : 0
+
   enabled             = true
   default_root_object = "index.html"
   comment             = "${var.project} - frontal"
@@ -105,7 +115,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   origin {
     origin_id                = "s3"
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
+    origin_access_control_id = aws_cloudfront_origin_access_control.frontend[0].id
   }
 
   # ---- Origen 2 en adelante: el balanceador, un puerto por servicio ----
@@ -194,8 +204,12 @@ resource "aws_cloudfront_distribution" "frontend" {
 }
 
 output "frontend" {
-  description = "Donde se abre la aplicacion."
-  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+  description = "Donde se abre la aplicacion, sea cual sea el modo activo."
+  value = var.frontal == "cloudfront" ? (
+    "https://${aws_cloudfront_distribution.frontend[0].domain_name}"
+    ) : (
+    "http://${aws_lb.principal.dns_name}:5173"
+  )
 }
 
 output "bucket_frontend" {
@@ -205,5 +219,10 @@ output "bucket_frontend" {
 
 output "distribucion_frontend" {
   description = "Identificador de la distribucion, para invalidar la cache al desplegar."
-  value       = aws_cloudfront_distribution.frontend.id
+  value       = var.frontal == "cloudfront" ? aws_cloudfront_distribution.frontend[0].id : null
+}
+
+output "modo_frontal" {
+  description = "Como se esta sirviendo el frontal ahora mismo."
+  value       = var.frontal
 }

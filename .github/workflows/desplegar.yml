@@ -24,6 +24,9 @@ permissions:
 
 env:
   CLUSTER: testenforce
+  # Como se sirve el frontal. Es la MISMA variable que recibe Terraform, para
+  # que no haya dos fuentes de verdad que puedan discrepar.
+  FRONTAL: ${{ vars.FRONTAL || 'nginx' }}
   # El orden importa al desplegar: Fleet antes que Rentals, porque Rentals le
   # llama nada mas arrancar para resolver vehiculos.
   SERVICIOS: pricing-api fleet-api notifications-api rentals-api
@@ -57,6 +60,10 @@ jobs:
       # atras intento luego desplegar una definicion con ese nombre.
       - name: Esperar a que existan los servicios
         run: |
+          # En modo nginx el frontal es un servicio mas; en cloudfront no existe.
+          [ "$FRONTAL" = "nginx" ] && SERVICIOS="$SERVICIOS frontend"
+          echo "SERVICIOS=$SERVICIOS" >> "$GITHUB_ENV"
+
           for intento in $(seq 1 30); do
             FALTAN=""
             for s in $SERVICIOS; do
@@ -115,6 +122,15 @@ jobs:
             docker push "$REGISTRO/testenforce/$s:$TAG"
             echo "::endgroup::"
           done
+
+          # El frontal es la excepcion: su Dockerfile vive fuera de src/ y su
+          # contexto de construccion es su propia carpeta.
+          if [ "$FRONTAL" = "nginx" ]; then
+            echo "::group::frontend"
+            docker build -f frontend/Dockerfile -t "$REGISTRO/testenforce/frontend:$TAG" frontend
+            docker push "$REGISTRO/testenforce/frontend:$TAG"
+            echo "::endgroup::"
+          fi
 
       # Se coge la definicion que ya existe, se le cambia solo la imagen y se
       # registra como revision nueva. Asi el resto de la configuracion —CPU,
@@ -215,18 +231,23 @@ jobs:
       # algo mas que acordarse de apagar.
       # ---------------------------------------------------------------------
       - uses: actions/setup-node@v4
+        if: env.FRONTAL == 'cloudfront'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # Solo para el modo cloudfront: con nginx, quien compila el frontal es la
+      # primera etapa de su propio Dockerfile.
       - name: Construir el frontal
+        if: env.FRONTAL == 'cloudfront'
         working-directory: frontend
         run: |
           npm ci
           npm run build
 
       - name: Publicar en S3
+        if: env.FRONTAL == 'cloudfront'
         run: |
           BUCKET=$(aws s3api list-buckets \
                      --query 'Buckets[?starts_with(Name, `testenforce-frontend-`)].Name' --output text)
@@ -245,6 +266,7 @@ jobs:
             --cache-control "no-cache"
 
       - name: Invalidar la cache de CloudFront
+        if: env.FRONTAL == 'cloudfront'
         run: |
           DIST=$(aws cloudfront list-distributions \
                    --query "DistributionList.Items[?Comment=='testenforce - frontal'].Id" --output text)
@@ -352,9 +374,16 @@ jobs:
             echo "| Fleet | http://${{ steps.balanceador.outputs.dns }}:5103 |"
             echo "| Notifications | http://${{ steps.balanceador.outputs.dns }}:5104 |"
             echo
-            CF=$(aws cloudfront list-distributions \
-                   --query "DistributionList.Items[?Comment=='testenforce - frontal'].DomainName" --output text)
-            echo "**La aplicacion:** https://$CF"
+            if [ "$FRONTAL" = "cloudfront" ]; then
+              CF=$(aws cloudfront list-distributions \
+                     --query "DistributionList.Items[?Comment=='testenforce - frontal'].DomainName" --output text)
+              echo "**La aplicacion:** https://$CF"
+            else
+              echo "**La aplicacion:** http://${{ steps.balanceador.outputs.dns }}:5173"
+              echo
+              echo "> Servida por nginx en ECS. Cuando AWS verifique la cuenta para"
+              echo "> CloudFront, cambia la variable \`FRONTAL\` a \`cloudfront\`."
+            fi
             echo
             echo "Se apagaran solos esta noche."
           } >> "$GITHUB_STEP_SUMMARY"
