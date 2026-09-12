@@ -156,20 +156,38 @@ public sealed class SmokeTests : IDisposable
     [Fact]
     public async Task The_frontend_proxies_every_backend_service()
     {
-        Requiere("frontend", "rentals", "pricing", "fleet", "notifications", "insurances", "billing");
+        Requiere("frontend");
 
-        // Una sola prueba cubre la configuracion de nginx, que es justo lo que
-        // usan las pruebas E2E: si el proxy esta mal, fallan todas a la vez.
-        (await _client.GetAsync($"{FrontendUrl}/api/vehicles")).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await _client.GetAsync($"{FrontendUrl}/api/notifications")).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await _client.GetAsync($"{FrontendUrl}/api/rentals?customerId={Guid.NewGuid()}"))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await _client.GetAsync($"{FrontendUrl}/api/policies?rentalId={Guid.NewGuid()}"))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await _client.GetAsync($"{FrontendUrl}/api/invoices?rentalId={Guid.NewGuid()}"))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await _client.GetAsync($"{FrontendUrl}/api/insurance/coverages"))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Cada ruta se comprueba SOLO si su servicio existe en este entorno.
+        //
+        // Antes esta prueba pedia los seis servicios de golpe, asi que en AWS
+        // —donde Insurances y Billing no estan desplegados— se saltaba entera.
+        // Y AWS es justo donde el proxy es distinto: otro DNS y otros nombres
+        // de vecino. Una prueba que se salta precisamente donde el codigo
+        // cambia no esta cubriendo nada.
+        async Task Responde(string ruta) =>
+            (await _client.GetAsync($"{FrontendUrl}{ruta}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        if (Desplegados.Contains("fleet"))
+            await Responde("/api/vehicles");
+
+        if (Desplegados.Contains("notifications"))
+            await Responde("/api/notifications");
+
+        if (Desplegados.Contains("rentals"))
+            await Responde($"/api/rentals?customerId={Guid.NewGuid()}");
+
+        if (Desplegados.Contains("pricing"))
+            await Responde("/api/pricing/catalog");
+
+        if (Desplegados.Contains("insurances"))
+        {
+            await Responde($"/api/policies?rentalId={Guid.NewGuid()}");
+            await Responde("/api/insurance/coverages");
+        }
+
+        if (Desplegados.Contains("billing"))
+            await Responde($"/api/invoices?rentalId={Guid.NewGuid()}");
     }
 
     [Fact]

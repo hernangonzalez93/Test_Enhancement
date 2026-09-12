@@ -113,24 +113,24 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           for s in $SERVICIOS; do
-            # De "rentals-api" al Dockerfile: src/Rentals/Rentals.Api/Dockerfile
-            NOMBRE=$(echo "${s%-api}" | sed 's/./\U&/')
-            RUTA="src/$NOMBRE/$NOMBRE.Api/Dockerfile"
+            if [ "$s" = "frontend" ]; then
+              # La excepcion, dicha UNA vez y aqui, donde esta la regla que
+              # rompe: el frontal no es un proyecto .NET, asi que ni su
+              # Dockerfile vive en src/ ni su contexto es la raiz.
+              RUTA="frontend/Dockerfile"
+              CONTEXTO="frontend"
+            else
+              # De "rentals-api" al Dockerfile: src/Rentals/Rentals.Api/Dockerfile
+              NOMBRE=$(echo "${s%-api}" | sed 's/./\U&/')
+              RUTA="src/$NOMBRE/$NOMBRE.Api/Dockerfile"
+              CONTEXTO="."
+            fi
 
             echo "::group::$s"
-            docker build -f "$RUTA" -t "$REGISTRO/testenforce/$s:$TAG" .
+            docker build -f "$RUTA" -t "$REGISTRO/testenforce/$s:$TAG" "$CONTEXTO"
             docker push "$REGISTRO/testenforce/$s:$TAG"
             echo "::endgroup::"
           done
-
-          # El frontal es la excepcion: su Dockerfile vive fuera de src/ y su
-          # contexto de construccion es su propia carpeta.
-          if [ "$FRONTAL" = "nginx" ]; then
-            echo "::group::frontend"
-            docker build -f frontend/Dockerfile -t "$REGISTRO/testenforce/frontend:$TAG" frontend
-            docker push "$REGISTRO/testenforce/frontend:$TAG"
-            echo "::endgroup::"
-          fi
 
       # Se coge la definicion que ya existe, se le cambia solo la imagen y se
       # registra como revision nueva. Asi el resto de la configuracion —CPU,
@@ -296,11 +296,14 @@ jobs:
         id: humo
         continue-on-error: true
         env:
-          SMOKE_SERVICES: pricing,fleet,rentals,notifications
+          # El frontal entra en la lista solo cuando es una tarea que se puede
+          # sondear. Con CloudFront delante no hay puerto 5173 al que llamar.
+          SMOKE_SERVICES: ${{ env.FRONTAL == 'nginx' && 'pricing,fleet,rentals,notifications,frontend' || 'pricing,fleet,rentals,notifications' }}
           SMOKE_PRICING_URL: http://${{ steps.balanceador.outputs.dns }}:5102
           SMOKE_FLEET_URL: http://${{ steps.balanceador.outputs.dns }}:5103
           SMOKE_RENTALS_URL: http://${{ steps.balanceador.outputs.dns }}:5101
           SMOKE_NOTIFICATIONS_URL: http://${{ steps.balanceador.outputs.dns }}:5104
+          SMOKE_FRONTEND_URL: http://${{ steps.balanceador.outputs.dns }}:5173
         run: dotnet test tests/Smoke.Tests
 
       # Si el humo falla, se vuelve a la version anterior sin esperar a que
